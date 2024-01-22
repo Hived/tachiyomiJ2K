@@ -422,6 +422,8 @@ class PreferencesHelper(val context: Context) {
 
     fun hideInLibraryItems() = flowPrefs.getBoolean("browse_hide_in_library_items", false)
 
+    fun showDuplicatedInLibraryItems() = flowPrefs.getBoolean("browse_show_duplicated_in_library_items", false)
+
     // Tutorial preferences
     fun shownFilterTutorial() = flowPrefs.getBoolean("shown_filter_tutorial", false)
 
