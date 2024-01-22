@@ -93,9 +93,6 @@ class ExtensionHolder(view: View, val adapter: ExtensionAdapter) :
         binding.version.text = infoText.joinToString(" • ")
         binding.lang.text = LocaleHelper.getDisplayName(extension.lang)
         binding.warning.text = when {
-            extension is Extension.Untrusted -> itemView.context.getString(R.string.untrusted)
-            extension is Extension.Installed && extension.isUnofficial -> itemView.context.getString(R.string.unofficial)
-            extension is Extension.Installed && extension.isObsolete -> itemView.context.getString(R.string.obsolete)
             extension.isNsfw -> itemView.context.getString(R.string.nsfw_short)
             else -> ""
         }.uppercase(Locale.ROOT)
