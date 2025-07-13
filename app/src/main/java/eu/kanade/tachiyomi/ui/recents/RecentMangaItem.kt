@@ -13,38 +13,33 @@ import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.ui.manga.chapter.BaseChapterHolder
 import eu.kanade.tachiyomi.ui.manga.chapter.BaseChapterItem
+import eu.kanade.tachiyomi.ui.recents.RecentsViewType.GroupedAll
 
 class RecentMangaItem(
     val mch: MangaChapterHistory = MangaChapterHistory.createBlank(),
     chapter: Chapter = ChapterImpl(),
     header: AbstractHeaderItem<*>?,
-) :
-    BaseChapterItem<BaseChapterHolder, AbstractHeaderItem<*>>(chapter, header) {
-
+) : BaseChapterItem<BaseChapterHolder, AbstractHeaderItem<*>>(chapter, header) {
     var downloadInfo = listOf<DownloadInfo>()
 
-    override fun getLayoutRes(): Int {
-        return if (mch.manga.id == null) {
+    override fun getLayoutRes(): Int =
+        if (mch.manga.id == null) {
             R.layout.recents_footer_item
         } else {
             R.layout.recent_manga_item
         }
-    }
 
     override fun createViewHolder(
         view: View,
         adapter: FlexibleAdapter<IFlexible<RecyclerView.ViewHolder>>,
-    ): BaseChapterHolder {
-        return if (mch.manga.id == null) {
+    ): BaseChapterHolder =
+        if (mch.manga.id == null) {
             RecentMangaFooterHolder(view, adapter as RecentMangaAdapter)
         } else {
             RecentMangaHolder(view, adapter as RecentMangaAdapter)
         }
-    }
 
-    override fun isSwipeable(): Boolean {
-        return mch.manga.id != null
-    }
+    override fun isSwipeable(): Boolean = mch.manga.id != null
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -59,13 +54,12 @@ class RecentMangaItem(
         return false
     }
 
-    override fun hashCode(): Int {
-        return if (mch.manga.id == null) {
+    override fun hashCode(): Int =
+        if (mch.manga.id == null) {
             -((header as? RecentMangaHeaderItem)?.recentsType ?: 0).hashCode()
         } else {
             (chapter.id ?: 0L).hashCode()
         }
-    }
 
     override fun bindViewHolder(
         adapter: FlexibleAdapter<IFlexible<RecyclerView.ViewHolder>>,
@@ -73,9 +67,28 @@ class RecentMangaItem(
         position: Int,
         payloads: MutableList<Any?>?,
     ) {
-        if (mch.manga.id == null) {
-            (holder as? RecentMangaFooterHolder)?.bind((header as? RecentMangaHeaderItem)?.recentsType ?: 0)
-        } else if (chapter.id != null) (holder as? RecentMangaHolder)?.bind(this)
+        if (mch.manga.id == null && holder is RecentMangaFooterHolder) {
+            holder.bind((header as? RecentMangaHeaderItem)?.recentsType ?: 0)
+        } else if (chapter.id != null && holder is RecentMangaHolder) {
+            holder.bind(this)
+            val recentMangaAdapter = adapter as RecentMangaAdapter
+            val useContainers = recentMangaAdapter.viewType.isUpdates || recentMangaAdapter.viewType == GroupedAll
+            if (useContainers) {
+                val setTop =
+                    (recentMangaAdapter.getItem(position - 1) as? RecentMangaItem)
+                        ?.mch
+                        ?.manga
+                        ?.id == null
+                val setBottom =
+                    (recentMangaAdapter.getItem(position + 1) as? RecentMangaItem)
+                        ?.mch
+                        ?.manga
+                        ?.id == null
+                holder.setCorners(setTop, setBottom)
+            } else {
+                holder.useContainers(false)
+            }
+        }
     }
 
     class DownloadInfo {
@@ -91,7 +104,9 @@ class RecentMangaItem(
 
         var status: Download.State
             get() = download?.status ?: _status
-            set(value) { _status = value }
+            set(value) {
+                _status = value
+            }
 
         @Transient var download: Download? = null
 

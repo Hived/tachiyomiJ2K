@@ -3,8 +3,9 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
         google()
+        maven { url=uri("https://jitpack.io") }
     }
 }
 
-rootProject.name = "TachiyomiJ2K"
+rootProject.name = "tachiyomiJ2K"
 include(":app")

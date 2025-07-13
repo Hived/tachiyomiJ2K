@@ -19,38 +19,45 @@ import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.util.lang.addBetaTag
 import eu.kanade.tachiyomi.util.lang.withSubtitle
 import eu.kanade.tachiyomi.util.system.dpToPx
+import eu.kanade.tachiyomi.util.system.end
 import eu.kanade.tachiyomi.util.system.getResourceColor
+import eu.kanade.tachiyomi.util.system.ignoredDisplayCutout
+import eu.kanade.tachiyomi.util.system.isLTR
 import eu.kanade.tachiyomi.util.system.openInBrowser
+import eu.kanade.tachiyomi.util.system.rootWindowInsetsCompat
 import uy.kohesive.injekt.injectLazy
 
-class OverflowDialog(activity: MainActivity) : Dialog(activity, R.style.OverflowDialogTheme) {
-
+class OverflowDialog(
+    activity: MainActivity,
+) : Dialog(activity, R.style.OverflowDialogTheme) {
     val binding = TachiOverflowLayoutBinding.inflate(activity.layoutInflater, null, false)
     val preferences: PreferencesHelper by injectLazy()
 
     init {
         setContentView(binding.root)
 
-        binding.overflowCardView.backgroundTintList = ColorStateList.valueOf(
-            ColorUtils.blendARGB(
-                activity.getResourceColor(R.attr.background),
-                activity.getResourceColor(R.attr.colorSecondary),
-                0.075f,
-            ),
-        )
+        binding.overflowCardView.backgroundTintList =
+            ColorStateList.valueOf(
+                ColorUtils.blendARGB(
+                    activity.getResourceColor(R.attr.background),
+                    activity.getResourceColor(R.attr.colorSecondary),
+                    0.075f,
+                ),
+            )
         binding.touchOutside.setOnClickListener {
             cancel()
         }
         val incogText = context.getString(R.string.incognito_mode)
         with(binding.incognitoModeItem) {
-            val titleText = context.getString(
-                if (preferences.incognitoMode().get()) {
-                    R.string.turn_off_
-                } else {
-                    R.string.turn_on_
-                },
-                incogText,
-            )
+            val titleText =
+                context.getString(
+                    if (preferences.incognitoMode().get()) {
+                        R.string.turn_off_
+                    } else {
+                        R.string.turn_on_
+                    },
+                    incogText,
+                )
             val subtitleText = context.getString(R.string.pauses_reading_history)
             text = titleText.withSubtitle(context, subtitleText)
             setIcon(
@@ -63,23 +70,25 @@ class OverflowDialog(activity: MainActivity) : Dialog(activity, R.style.Overflow
             setOnClickListener {
                 preferences.incognitoMode().toggle()
                 val incog = preferences.incognitoMode().get()
-                val newTitle = context.getString(
-                    if (incog) {
-                        R.string.turn_off_
-                    } else {
-                        R.string.turn_on_
-                    },
-                    incogText,
-                )
+                val newTitle =
+                    context.getString(
+                        if (incog) {
+                            R.string.turn_off_
+                        } else {
+                            R.string.turn_on_
+                        },
+                        incogText,
+                    )
                 text = newTitle.withSubtitle(context, subtitleText)
-                val drawable = AnimatedVectorDrawableCompat.create(
-                    context,
-                    if (incog) {
-                        R.drawable.anim_read_to_incog
-                    } else {
-                        R.drawable.anim_incog_to_read
-                    },
-                )
+                val drawable =
+                    AnimatedVectorDrawableCompat.create(
+                        context,
+                        if (incog) {
+                            R.drawable.anim_read_to_incog
+                        } else {
+                            R.drawable.anim_incog_to_read
+                        },
+                    )
                 setIcon(drawable)
                 (getIcon() as? AnimatedVectorDrawableCompat)?.start()
             }
@@ -95,14 +104,15 @@ class OverflowDialog(activity: MainActivity) : Dialog(activity, R.style.Overflow
         }
 
         val vName = "v${BuildConfig.VERSION_NAME}".substringBefore("-")
-        val newVName = buildSpannedString {
-            color(context.getResourceColor(android.R.attr.textColorSecondary)) {
-                append(vName)
+        val newVName =
+            buildSpannedString {
+                color(context.getResourceColor(android.R.attr.textColorSecondary)) {
+                    append(vName)
+                }
+                if (BuildConfig.BETA) {
+                    append("".addBetaTag(context, false))
+                }
             }
-            if (BuildConfig.BETA) {
-                append("".addBetaTag(context, false))
-            }
-        }
 
         binding.aboutItem.text = context.getString(R.string.about).withSubtitle(newVName)
 
@@ -116,8 +126,12 @@ class OverflowDialog(activity: MainActivity) : Dialog(activity, R.style.Overflow
             dismiss()
         }
 
+        val insets =
+            activity.window.decorView.rootWindowInsetsCompat!!
+                .ignoredDisplayCutout
         binding.overflowCardView.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            topMargin = activity.toolbarHeight - 2.dpToPx
+            topMargin = activity.toolbarHeight - 2.dpToPx + insets.top
+            marginEnd = 14.dpToPx + insets.end(context.resources.isLTR)
         }
         window?.let { window ->
             window.navigationBarColor = Color.TRANSPARENT

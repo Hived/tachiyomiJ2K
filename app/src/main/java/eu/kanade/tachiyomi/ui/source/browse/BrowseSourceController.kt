@@ -26,11 +26,14 @@ import eu.kanade.tachiyomi.data.database.models.Manga
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.databinding.BrowseSourceControllerBinding
 import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.LocalSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.pkgName
 import eu.kanade.tachiyomi.ui.base.controller.BaseCoroutineController
+import eu.kanade.tachiyomi.ui.extension.details.ExtensionDetailsController
 import eu.kanade.tachiyomi.ui.main.FloatingSearchInterface
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.main.SearchActivity
@@ -48,6 +51,7 @@ import eu.kanade.tachiyomi.util.view.applyBottomAnimatedInsets
 import eu.kanade.tachiyomi.util.view.fullAppBarHeight
 import eu.kanade.tachiyomi.util.view.inflate
 import eu.kanade.tachiyomi.util.view.isControllerVisible
+import eu.kanade.tachiyomi.util.view.previousController
 import eu.kanade.tachiyomi.util.view.requestFilePermissionsSafe
 import eu.kanade.tachiyomi.util.view.scrollViewWith
 import eu.kanade.tachiyomi.util.view.setOnQueryTextChangeListener
@@ -63,13 +67,13 @@ import kotlin.math.roundToInt
 /**
  * Controller to manage the catalogues available in the app.
  */
-open class BrowseSourceController(bundle: Bundle) :
-    BaseCoroutineController<BrowseSourceControllerBinding, BrowseSourcePresenter>(bundle),
+open class BrowseSourceController(
+    bundle: Bundle,
+) : BaseCoroutineController<BrowseSourceControllerBinding, BrowseSourcePresenter>(bundle),
     FlexibleAdapter.OnItemClickListener,
     FlexibleAdapter.OnItemLongClickListener,
     FloatingSearchInterface,
     FlexibleAdapter.EndlessScrollListener {
-
     constructor(
         source: CatalogueSource,
         searchQuery: String? = null,
@@ -126,7 +130,7 @@ open class BrowseSourceController(bundle: Bundle) :
     private var lastPosition: Int = -1
 
     private val isBehindGlobalSearch: Boolean
-        get() = router.backstackSize >= 2 && router.backstack[router.backstackSize - 2].controller is GlobalSearchController
+        get() = previousController is GlobalSearchController
 
     init {
         setHasOptionsMenu(true)
@@ -135,24 +139,21 @@ open class BrowseSourceController(bundle: Bundle) :
     override val mainRecycler: RecyclerView?
         get() = recycler
 
-    override fun getTitle(): String? {
-        return if (presenter.sourceIsInitialized) presenter.source.name else null
-    }
+    override fun getTitle(): String? = if (presenter.sourceIsInitialized) presenter.source.name else null
 
-    override fun getSearchTitle(): String? {
-        return if (presenter.sourceIsInitialized) searchTitle(presenter.source.name) else null
-    }
+    override fun getSearchTitle(): String? = if (presenter.sourceIsInitialized) searchTitle(presenter.source.name) else null
 
     // disabling for now, one day maybe it will source icons will good
 //    override fun getBigIcon(): Drawable? {
 //        return presenter.source.icon()
 //    }
 
-    override val presenter = BrowseSourcePresenter(
-        args.getLong(SOURCE_ID_KEY),
-        args.getString(SEARCH_QUERY_KEY),
-        args.getBoolean(USE_LATEST_KEY),
-    )
+    override val presenter =
+        BrowseSourcePresenter(
+            args.getLong(SOURCE_ID_KEY),
+            args.getString(SEARCH_QUERY_KEY),
+            args.getBoolean(USE_LATEST_KEY),
+        )
 
     override fun createBinding(inflater: LayoutInflater) = BrowseSourceControllerBinding.inflate(inflater)
 
@@ -163,8 +164,31 @@ open class BrowseSourceController(bundle: Bundle) :
         adapter = FlexibleAdapter(null, this)
         setupRecycler(view)
 
-        binding.fab.isVisible = presenter.sourceFilters.isNotEmpty()
-        binding.fab.setOnClickListener { showFilters() }
+        if (presenter.sourceFilters.isEmpty() && (presenter.source as? CatalogueSource)?.supportsLatest != true) {
+            binding.floatingBrowseBar.isVisible = false
+        } else {
+            binding.filterGroup.isVisible = presenter.sourceFilters.isNotEmpty()
+            binding.latestGroup.isVisible =
+                (presenter.source as? CatalogueSource)?.supportsLatest == true
+        }
+        binding.latestGroup.setOnClickListener {
+            if (!presenter.useLatest || !presenter.filtersMatchDefault() || presenter.query.isNotBlank()) {
+                presenter.useLatest = true
+                resetPager()
+            }
+            updatePopLatestIcons()
+        }
+        binding.popularGroup.setOnClickListener {
+            if (presenter.useLatest || !presenter.filtersMatchDefault() || presenter.query.isNotBlank()) {
+                presenter.useLatest = false
+                resetPager()
+            }
+            updatePopLatestIcons()
+        }
+        binding.filterGroup.setOnClickListener {
+            showFilters()
+            binding.filterGroup.isChecked = !presenter.filtersMatchDefault() || presenter.query.isNotBlank()
+        }
         activityBinding?.appBar?.y = 0f
         activityBinding?.appBar?.updateAppBarAfterY(recycler)
         activityBinding?.appBar?.lockYPos = true
@@ -182,6 +206,7 @@ open class BrowseSourceController(bundle: Bundle) :
         } else {
             binding.progress.isVisible = true
         }
+        updatePopLatestIcons()
         requestFilePermissionsSafe(301, preferences, presenter.source is LocalSource)
     }
 
@@ -197,36 +222,41 @@ open class BrowseSourceController(bundle: Bundle) :
         var oldOffset = 0f
         val oldRecycler = binding.catalogueView.getChildAt(1)
         if (oldRecycler is RecyclerView) {
-            oldPosition = (oldRecycler.layoutManager as LinearLayoutManager).findFirstCompletelyVisibleItemPosition()
+            oldPosition = (oldRecycler.layoutManager as LinearLayoutManager)
+                .findFirstCompletelyVisibleItemPosition()
                 .takeIf { it != RecyclerView.NO_POSITION }
                 ?: (oldRecycler.layoutManager as LinearLayoutManager).findFirstVisibleItemPosition()
-            oldOffset = oldRecycler.layoutManager?.findViewByPosition(oldPosition)?.y?.minus(oldRecycler.paddingTop) ?: 0f
+            oldOffset = oldRecycler.layoutManager
+                ?.findViewByPosition(oldPosition)
+                ?.y
+                ?.minus(oldRecycler.paddingTop) ?: 0f
             oldRecycler.adapter = null
 
             binding.catalogueView.removeView(oldRecycler)
         }
 
-        val recycler = if (presenter.prefs.browseAsList().get()) {
-            RecyclerView(view.context).apply {
-                id = R.id.recycler
-                layoutManager = LinearLayoutManagerAccurateOffset(context)
-                layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                addItemDecoration(DividerItemDecoration(context, DividerItemDecoration.VERTICAL))
-            }
-        } else {
-            (binding.catalogueView.inflate(R.layout.manga_recycler_autofit) as AutofitRecyclerView).apply {
-                setGridSize(preferences)
+        val recycler =
+            if (presenter.prefs.browseAsList().get()) {
+                RecyclerView(view.context).apply {
+                    id = R.id.recycler
+                    layoutManager = LinearLayoutManagerAccurateOffset(context)
+                    layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    addItemDecoration(DividerItemDecoration(context, DividerItemDecoration.VERTICAL))
+                }
+            } else {
+                (binding.catalogueView.inflate(R.layout.manga_recycler_autofit) as AutofitRecyclerView).apply {
+                    setGridSize(preferences)
 
-                (layoutManager as androidx.recyclerview.widget.GridLayoutManager).spanSizeLookup = object : androidx.recyclerview.widget.GridLayoutManager.SpanSizeLookup() {
-                    override fun getSpanSize(position: Int): Int {
-                        return when (adapter?.getItemViewType(position)) {
-                            R.layout.manga_grid_item, null -> 1
-                            else -> spanCount
+                    (layoutManager as androidx.recyclerview.widget.GridLayoutManager).spanSizeLookup =
+                        object : androidx.recyclerview.widget.GridLayoutManager.SpanSizeLookup() {
+                            override fun getSpanSize(position: Int): Int =
+                                when (adapter?.getItemViewType(position)) {
+                                    R.layout.manga_grid_item, null -> 1
+                                    else -> spanCount
+                                }
                         }
-                    }
                 }
             }
-        }
         recycler.clipToPadding = false
         recycler.setHasFixedSize(true)
         recycler.adapter = adapter
@@ -237,8 +267,8 @@ open class BrowseSourceController(bundle: Bundle) :
             true,
             afterInsets = { insets ->
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-                    binding.fab.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                        bottomMargin = insets.getInsets(systemBars() or ime()).bottom + 16.dpToPx
+                    binding.floatingBrowseBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                        bottomMargin = insets.getInsets(systemBars() or ime()).bottom + 8.dpToPx
                     }
                 }
                 val bigToolbarHeight = fullAppBarHeight ?: 0
@@ -251,19 +281,7 @@ open class BrowseSourceController(bundle: Bundle) :
                 )
             },
         )
-        binding.fab.applyBottomAnimatedInsets(16.dpToPx)
-
-        recycler.addOnScrollListener(
-            object : RecyclerView.OnScrollListener() {
-                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                    if (dy <= 0 && !binding.fab.isExtended) {
-                        binding.fab.extend()
-                    } else if (dy > 0 && binding.fab.isExtended) {
-                        binding.fab.shrink()
-                    }
-                }
-            },
-        )
+        binding.floatingBrowseBar.applyBottomAnimatedInsets(8.dpToPx)
 
         if (oldPosition != RecyclerView.NO_POSITION) {
             (recycler.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(oldPosition, oldOffset.roundToInt())
@@ -274,7 +292,10 @@ open class BrowseSourceController(bundle: Bundle) :
         this.recycler = recycler
     }
 
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+    override fun onCreateOptionsMenu(
+        menu: Menu,
+        inflater: MenuInflater,
+    ) {
         inflater.inflate(R.menu.browse_source, menu)
 
         // Initialize search menu
@@ -290,9 +311,6 @@ open class BrowseSourceController(bundle: Bundle) :
             searchItem?.collapseActionView()
             searchView?.setQuery("", true)
         }
-
-        updatePopularLatestIcon(menu)
-
         setOnQueryTextChangeListener(searchView, onlyOnSubmit = true, hideKbOnSubmit = true) {
             searchWithQuery(it ?: "")
             true
@@ -301,30 +319,17 @@ open class BrowseSourceController(bundle: Bundle) :
         updateDisplayMenuItem(menu)
     }
 
-    private fun updatePopularLatestIcon(menu: Menu?) {
-        menu?.findItem(R.id.action_popular_latest)?.apply {
-            val icon = if (!presenter.useLatest) {
-                R.drawable.ic_new_releases_24dp
-            } else {
-                R.drawable.ic_heart_24dp
-            }
-            setIcon(icon)
-            val titleRes = if (!presenter.useLatest) {
-                R.string.latest
-            } else {
-                R.string.popular
-            }
-            setTitle(titleRes)
-        }
-    }
-
-    private fun updateDisplayMenuItem(menu: Menu?, isListMode: Boolean? = null) {
+    private fun updateDisplayMenuItem(
+        menu: Menu?,
+        isListMode: Boolean? = null,
+    ) {
         menu?.findItem(R.id.action_display_mode)?.apply {
-            val icon = if (isListMode ?: presenter.prefs.browseAsList().get()) {
-                R.drawable.ic_view_module_24dp
-            } else {
-                R.drawable.ic_view_list_24dp
-            }
+            val icon =
+                if (isListMode ?: presenter.prefs.browseAsList().get()) {
+                    R.drawable.ic_view_module_24dp
+                } else {
+                    R.drawable.ic_view_list_24dp
+                }
             setIcon(icon)
         }
     }
@@ -342,8 +347,9 @@ open class BrowseSourceController(bundle: Bundle) :
 
         val isHttpSource = presenter.source is HttpSource
         menu.findItem(R.id.action_open_in_web_view).isVisible = isHttpSource
-        val supportsLatest = (presenter.source as? CatalogueSource)?.supportsLatest == true
-        menu.findItem(R.id.action_popular_latest).isVisible = supportsLatest
+
+        val isConfigurableSource = presenter.source is ConfigurableSource
+        menu.findItem(R.id.action_source_settings).isVisible = isConfigurableSource
 
         val isLocalSource = presenter.source is LocalSource
         menu.findItem(R.id.action_local_source_help).isVisible = isLocalSource
@@ -355,7 +361,7 @@ open class BrowseSourceController(bundle: Bundle) :
             R.id.action_display_mode -> swapDisplayMode()
             R.id.action_open_in_web_view -> openInWebView()
             R.id.action_local_source_help -> openLocalSourceHelpGuide()
-            R.id.action_popular_latest -> swapPopularLatest()
+            R.id.action_source_settings -> openSourceSettings()
             else -> return super.onOptionsItemSelected(item)
         }
         return true
@@ -389,7 +395,7 @@ open class BrowseSourceController(bundle: Bundle) :
                             (
                                 (presenter.sourceFilters[i] as Filter.Group<*>).state[j] as
                                     Filter<*>
-                                ).state
+                            ).state
                         ) {
                             matches = false
                             break
@@ -430,46 +436,54 @@ open class BrowseSourceController(bundle: Bundle) :
      * If the genre name can't be found the filters,
      * the standard searchWithQuery search method is used instead.
      *
-     * @param genreName the name of the genre
+     * @param names the names of the genres/tags
+     * @param useContains if true checks if any of the filter names contains, rather than be an
+     * exact match
      */
-    fun searchWithGenre(genreName: String, useContains: Boolean = false) {
+    fun searchGenres(
+        names: List<String>,
+        useContains: Boolean = false,
+    ) {
         presenter.sourceFilters = presenter.source.getFilterList()
-
+        val genreNames = names.map { it.split(":").last().trim() }
         var filterList: FilterList? = null
+        genres@ for (genreName in genreNames) {
+            filter@ for (sourceFilter in presenter.sourceFilters) {
+                if (sourceFilter is Filter.Group<*>) {
+                    for (filter in sourceFilter.state) {
+                        if (filter is Filter<*> &&
+                            if (useContains) {
+                                filter.name.contains(genreName, true)
+                            } else {
+                                filter.name.equals(genreName, true)
+                            }
+                        ) {
+                            when (filter) {
+                                is Filter.TriState -> filter.state = 1
+                                is Filter.CheckBox -> filter.state = true
+                                else -> break
+                            }
+                            filterList = presenter.sourceFilters
+                            break@filter
+                        }
+                    }
+                } else if (sourceFilter is Filter.Select<*>) {
+                    val index =
+                        sourceFilter.values
+                            .filterIsInstance<String>()
+                            .indexOfFirst {
+                                if (useContains) {
+                                    it.contains(genreName, true)
+                                } else {
+                                    it.equals(genreName, true)
+                                }
+                            }
 
-        filter@ for (sourceFilter in presenter.sourceFilters) {
-            if (sourceFilter is Filter.Group<*>) {
-                for (filter in sourceFilter.state) {
-                    if (filter is Filter<*> &&
-                        if (useContains) {
-                            filter.name.contains(genreName, true)
-                        } else {
-                            filter.name.equals(genreName, true)
-                        }
-                    ) {
-                        when (filter) {
-                            is Filter.TriState -> filter.state = 1
-                            is Filter.CheckBox -> filter.state = true
-                            else -> break
-                        }
+                    if (index != -1) {
+                        sourceFilter.state = index
                         filterList = presenter.sourceFilters
-                        break@filter
+                        break
                     }
-                }
-            } else if (sourceFilter is Filter.Select<*>) {
-                val index = sourceFilter.values.filterIsInstance<String>()
-                    .indexOfFirst {
-                        if (useContains) {
-                            it.contains(genreName, true)
-                        } else {
-                            it.equals(genreName, true)
-                        }
-                    }
-
-                if (index != -1) {
-                    sourceFilter.state = index
-                    filterList = presenter.sourceFilters
-                    break
                 }
             }
         }
@@ -483,22 +497,26 @@ open class BrowseSourceController(bundle: Bundle) :
             presenter.restartPager("", filterList)
         } else {
             if (!useContains) {
-                searchWithGenre(genreName, true)
+                searchGenres(genreNames, true)
                 return
             }
-            searchWithQuery(genreName)
+            if (genreNames.size == 1) {
+                searchWithQuery(genreNames.first())
+            }
         }
+        updatePopLatestIcons()
     }
 
     private fun openInWebView() {
         val source = presenter.source as? HttpSource ?: return
         val activity = activity ?: return
-        val intent = WebViewActivity.newIntent(
-            activity,
-            source.baseUrl,
-            source.id,
-            source.name,
-        )
+        val intent =
+            WebViewActivity.newIntent(
+                activity,
+                source.baseUrl,
+                source.id,
+                source.name,
+            )
         startActivity(intent)
     }
 
@@ -506,7 +524,21 @@ open class BrowseSourceController(bundle: Bundle) :
         activity?.openInBrowser(LocalSource.HELP_URL)
     }
 
-    override fun onChangeStarted(handler: ControllerChangeHandler, type: ControllerChangeType) {
+    private fun openSourceSettings() {
+        presenter.source.pkgName()?.let { pkgName ->
+            router.pushController(
+                ExtensionDetailsController(
+                    pkgName,
+                    presenter.source.id,
+                ).withFadeTransaction(),
+            )
+        }
+    }
+
+    override fun onChangeStarted(
+        handler: ControllerChangeHandler,
+        type: ControllerChangeType,
+    ) {
         super.onChangeStarted(handler, type)
         if (type == ControllerChangeType.POP_ENTER && lastPosition > -1) {
             adapter?.notifyItemChanged(lastPosition, false)
@@ -538,7 +570,10 @@ open class BrowseSourceController(bundle: Bundle) :
      * @param page the current page.
      * @param mangas the list of manga of the page.
      */
-    fun onAddPage(page: Int, mangas: List<BrowseSourceItem>) {
+    fun onAddPage(
+        page: Int,
+        mangas: List<BrowseSourceItem>,
+    ) {
         val adapter = adapter ?: return
         hideProgressBar()
         if (page == 1) {
@@ -565,31 +600,34 @@ open class BrowseSourceController(bundle: Bundle) :
         snack?.dismiss()
 
         val message = getErrorMessage(error)
-        val retryAction = View.OnClickListener {
-            // If not the first page, show bottom binding.progress bar.
-            if (adapter.mainItemCount > 0 && progressItem != null) {
-                adapter.addScrollableFooterWithDelay(progressItem!!, 0, true)
-            } else {
-                showProgressBar()
+        val retryAction =
+            View.OnClickListener {
+                // If not the first page, show bottom binding.progress bar.
+                if (adapter.mainItemCount > 0 && progressItem != null) {
+                    adapter.addScrollableFooterWithDelay(progressItem!!, 0, true)
+                } else {
+                    showProgressBar()
+                }
+                presenter.requestNext()
             }
-            presenter.requestNext()
-        }
 
         if (adapter.isEmpty) {
             val actions = emptyList<EmptyView.Action>().toMutableList()
 
-            actions += if (presenter.source is LocalSource) {
-                EmptyView.Action(
-                    R.string.local_source_help_guide,
-                ) { openLocalSourceHelpGuide() }
-            } else {
-                EmptyView.Action(R.string.retry, retryAction)
-            }
+            actions +=
+                if (presenter.source is LocalSource) {
+                    EmptyView.Action(
+                        R.string.local_source_help_guide,
+                    ) { openLocalSourceHelpGuide() }
+                } else {
+                    EmptyView.Action(R.string.retry, retryAction)
+                }
 
             if (presenter.source is HttpSource) {
-                actions += EmptyView.Action(
-                    R.string.open_in_webview,
-                ) { openInWebView() }
+                actions +=
+                    EmptyView.Action(
+                        R.string.open_in_webview,
+                    ) { openInWebView() }
             }
 
             binding.emptyView.show(
@@ -602,9 +640,10 @@ open class BrowseSourceController(bundle: Bundle) :
                 actions,
             )
         } else {
-            snack = binding.sourceLayout.snack(message, Snackbar.LENGTH_INDEFINITE) {
-                setAction(R.string.retry, retryAction)
-            }
+            snack =
+                binding.sourceLayout.snack(message, Snackbar.LENGTH_INDEFINITE) {
+                    setAction(R.string.retry, retryAction)
+                }
         }
         if (isControllerVisible) {
             activityBinding?.appBar?.lockYPos = false
@@ -624,7 +663,7 @@ open class BrowseSourceController(bundle: Bundle) :
     }
 
     /**
-     * Sets a new binding.progress item and reenables the scroll listener.
+     * Sets a new binding.progress item and re-enables the scroll listener.
      */
     private fun resetProgressItem() {
         progressItem = ProgressItem()
@@ -635,7 +674,10 @@ open class BrowseSourceController(bundle: Bundle) :
     /**
      * Called by the adapter when scrolled near the bottom.
      */
-    override fun onLoadMore(lastPosition: Int, currentPage: Int) {
+    override fun onLoadMore(
+        lastPosition: Int,
+        currentPage: Int,
+    ) {
         if (presenter.hasNextPage()) {
             presenter.requestNext()
         } else {
@@ -671,17 +713,17 @@ open class BrowseSourceController(bundle: Bundle) :
         setupRecycler(view)
         // Initialize mangas if not on a metered connection
         if (!view.context.connectivityManager.isActiveNetworkMetered) {
-            val mangas = (0 until adapter.itemCount).mapNotNull {
-                (adapter.getItem(it) as? BrowseSourceItem)?.manga
-            }
+            val mangas =
+                (0 until adapter.itemCount).mapNotNull {
+                    (adapter.getItem(it) as? BrowseSourceItem)?.manga
+                }
             presenter.initializeMangas(mangas)
         }
     }
 
-    private fun swapPopularLatest() {
+    private fun resetPager() {
         val adapter = adapter ?: return
 
-        presenter.useLatest = !presenter.useLatest
         showProgressBar()
         adapter.clear()
         updatePopLatestIcons()
@@ -698,9 +740,24 @@ open class BrowseSourceController(bundle: Bundle) :
     }
 
     private fun updatePopLatestIcons() {
-        listOf(activityBinding?.toolbar?.menu, activityBinding?.searchToolbar?.menu).forEach {
-            updatePopularLatestIcon(it)
-        }
+        val allDefault = presenter.filtersMatchDefault() && presenter.query.isBlank()
+        binding.latestGroup.isChecked = presenter.useLatest && allDefault
+        binding.latestGroup.setIconResource(
+            if (presenter.useLatest && allDefault) {
+                R.drawable.ic_new_releases_24dp
+            } else {
+                R.drawable.ic_new_releases_outline_24dp
+            },
+        )
+        binding.popularGroup.isChecked = !presenter.useLatest && allDefault
+        binding.popularGroup.setIconResource(
+            if (!presenter.useLatest && allDefault) {
+                R.drawable.ic_heart_24dp
+            } else {
+                R.drawable.ic_heart_outline_24dp
+            },
+        )
+        binding.filterGroup.isChecked = !allDefault
     }
 
     /**
@@ -746,7 +803,10 @@ open class BrowseSourceController(bundle: Bundle) :
      * @param position the position of the element clicked.
      * @return true if the item should be selected, false otherwise.
      */
-    override fun onItemClick(view: View?, position: Int): Boolean {
+    override fun onItemClick(
+        view: View?,
+        position: Int,
+    ): Boolean {
         val item = adapter?.getItem(position) as? BrowseSourceItem ?: return false
         router.pushController(MangaDetailsController(item.manga, true).withFadeTransaction())
         lastPosition = position
@@ -767,20 +827,21 @@ open class BrowseSourceController(bundle: Bundle) :
         val view = view ?: return
         val activity = activity ?: return
         snack?.dismiss()
-        snack = manga.addOrRemoveToFavorites(
-            presenter.db,
-            preferences,
-            view,
-            activity,
-            presenter.sourceManager,
-            this,
-            onMangaAdded = {
-                adapter?.notifyItemChanged(position)
-                snack = view.snack(R.string.added_to_library)
-            },
-            onMangaMoved = { adapter?.notifyItemChanged(position) },
-            onMangaDeleted = { presenter.confirmDeletion(manga) },
-        )
+        snack =
+            manga.addOrRemoveToFavorites(
+                presenter.db,
+                preferences,
+                view,
+                activity,
+                presenter.sourceManager,
+                this,
+                onMangaAdded = {
+                    adapter?.notifyItemChanged(position)
+                    snack = view.snack(R.string.added_to_library)
+                },
+                onMangaMoved = { adapter?.notifyItemChanged(position) },
+                onMangaDeleted = { presenter.confirmDeletion(manga) },
+            )
         if (snack?.duration == Snackbar.LENGTH_INDEFINITE) {
             (activity as? MainActivity)?.setUndoSnackBar(snack)
         }

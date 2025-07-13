@@ -23,7 +23,12 @@ import uy.kohesive.injekt.api.get
  * @param remoteTrack the remote Track object.
  * @param service the tracker service.
  */
-fun syncChaptersWithTrackServiceTwoWay(db: DatabaseHelper, chapters: List<Chapter>, remoteTrack: Track, service: TrackService) {
+fun syncChaptersWithTrackServiceTwoWay(
+    db: DatabaseHelper,
+    chapters: List<Chapter>,
+    remoteTrack: Track,
+    service: TrackService,
+) {
     val sortedChapters = chapters.sortedBy { it.chapter_number }
     sortedChapters
         .filter { chapter -> chapter.chapter_number <= remoteTrack.last_chapter_read && !chapter.read }

@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.ui.manga.chapter
 
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.annotation.SuppressLint
 import android.content.res.ColorStateList
 import android.view.View
 import androidx.core.animation.doOnEnd
 import androidx.core.animation.doOnStart
+import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
 import androidx.core.widget.TextViewCompat
 import eu.kanade.tachiyomi.R
@@ -16,25 +18,34 @@ import eu.kanade.tachiyomi.ui.manga.MangaDetailsAdapter
 import eu.kanade.tachiyomi.util.chapter.ChapterUtil
 import eu.kanade.tachiyomi.util.chapter.ChapterUtil.Companion.preferredChapterName
 import eu.kanade.tachiyomi.util.isLocal
+import eu.kanade.tachiyomi.util.system.cardColor
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.getResourceColor
+import eu.kanade.tachiyomi.util.view.makeContainerShape
 
+@SuppressLint("ClickableViewAccessibility")
 class ChapterHolder(
     view: View,
     private val adapter: MangaDetailsAdapter,
 ) : BaseChapterHolder(view, adapter) {
-
     private val binding = ChaptersItemBinding.bind(view)
     private var localSource = false
 
     init {
+        binding.chapterCard.setCardBackgroundColor(itemView.context.cardColor)
         binding.downloadButton.downloadButton.setOnLongClickListener {
             adapter.delegate.startDownloadRange(flexibleAdapterPosition)
             true
         }
+        binding.expandedDownloadTarget.setOnTouchListener { _, event ->
+            binding.downloadButton.downloadButton.onTouchEvent(event)
+        }
     }
 
-    fun bind(item: ChapterItem, manga: Manga) {
+    fun bind(
+        item: ChapterItem,
+        manga: Manga,
+    ) {
         val chapter = item.chapter
         val isLocked = item.isLocked
         itemView.transitionName = "details chapter ${chapter.id ?: 0L} transition"
@@ -73,7 +84,7 @@ class ChapterHolder(
             statuses.add(chapter.scanlator!!)
         }
 
-        if (binding.frontView.translationX == 0f) {
+        if (getFrontView().translationX == 0f) {
             binding.read.setImageResource(
                 if (item.read) R.drawable.ic_eye_off_24dp else R.drawable.ic_eye_24dp,
             )
@@ -90,10 +101,11 @@ class ChapterHolder(
         )
         binding.chapterScanlator.text = statuses.joinToString(" • ")
 
-        val status = when {
-            adapter.isSelected(flexibleAdapterPosition) -> Download.State.CHECKED
-            else -> item.status
-        }
+        val status =
+            when {
+                adapter.isSelected(flexibleAdapterPosition) -> Download.State.CHECKED
+                else -> item.status
+            }
 
         notifyStatus(status, item.isLocked, item.progress)
         resetFrontView()
@@ -112,7 +124,7 @@ class ChapterHolder(
         anim2.duration = 600
         anim2.startDelay = 500
         anim2.addUpdateListener {
-            if (binding.startView.isVisible && binding.frontView.translationX <= 0) {
+            if (binding.startView.isVisible && getFrontView().translationX <= 0) {
                 binding.startView.isVisible = false
                 binding.endView.isVisible = true
             }
@@ -124,25 +136,22 @@ class ChapterHolder(
         animatorSet.start()
     }
 
-    private fun slideAnimation(from: Float, to: Float): ObjectAnimator {
-        return ObjectAnimator.ofFloat(binding.frontView, View.TRANSLATION_X, from, to)
+    private fun slideAnimation(
+        from: Float,
+        to: Float,
+    ): ObjectAnimator =
+        ObjectAnimator
+            .ofFloat(getFrontView(), View.TRANSLATION_X, from, to)
             .setDuration(300)
-    }
 
-    override fun getFrontView(): View {
-        return binding.frontView
-    }
+    override fun getFrontView(): View = binding.chapterCard
 
-    override fun getRearEndView(): View {
-        return binding.endView
-    }
+    override fun getRearEndView(): View = binding.endView
 
-    override fun getRearStartView(): View {
-        return binding.startView
-    }
+    override fun getRearStartView(): View = binding.startView
 
     private fun resetFrontView() {
-        if (binding.frontView.translationX != 0f) {
+        if (getFrontView().translationX != 0f) {
             itemView.post {
                 androidx.transition.TransitionManager.endTransitions(adapter.recyclerView)
                 adapter.notifyItemChanged(flexibleAdapterPosition)
@@ -150,12 +159,27 @@ class ChapterHolder(
         }
     }
 
-    fun notifyStatus(status: Download.State, locked: Boolean, progress: Int, animated: Boolean = false) = with(binding.downloadButton.downloadButton) {
+    fun notifyStatus(
+        status: Download.State,
+        locked: Boolean,
+        progress: Int,
+        animated: Boolean = false,
+    ) = with(binding.downloadButton.downloadButton) {
         adapter.delegate.accentColor()?.let {
-            binding.startView.backgroundTintList = ColorStateList.valueOf(it)
-            binding.bookmark.imageTintList = ColorStateList.valueOf(
-                context.getResourceColor(android.R.attr.textColorPrimaryInverse),
-            )
+            binding.startView.setCardBackgroundColor(it)
+
+            val color = binding.chapterCard.context.cardColor
+            val bgArray = FloatArray(3)
+            val accentArray = FloatArray(3)
+            ColorUtils.colorToHSL(color, bgArray)
+            ColorUtils.colorToHSL(it, accentArray)
+            bgArray[0] = accentArray[0]
+            binding.chapterCard.setCardBackgroundColor(ColorUtils.HSLToColor(bgArray))
+
+            binding.bookmark.imageTintList =
+                ColorStateList.valueOf(
+                    context.getResourceColor(android.R.attr.textColorPrimaryInverse),
+                )
             TextViewCompat.setCompoundDrawableTintList(
                 binding.chapterTitle,
                 ColorStateList.valueOf(it),
@@ -168,5 +192,15 @@ class ChapterHolder(
         }
         isVisible = !localSource
         setDownloadStatus(status, progress, animated)
+    }
+
+    fun setCorners(
+        top: Boolean,
+        bottom: Boolean,
+    ) {
+        val shapeModel = binding.chapterCard.makeContainerShape(top, bottom)
+        binding.chapterCard.shapeAppearanceModel = shapeModel
+        binding.startView.shapeAppearanceModel = shapeModel
+        binding.endView.shapeAppearanceModel = shapeModel
     }
 }

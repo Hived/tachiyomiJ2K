@@ -60,10 +60,13 @@ class BrowseSourceListHolder(
             binding.coverThumbnail.dispose()
         } else {
             manga.id ?: return
-            val request = ImageRequest.Builder(view.context).data(manga)
-                .target(CoverViewTarget(binding.coverThumbnail))
-                .setParameter(MangaCoverFetcher.useCustomCover, false)
-                .build()
+            val request =
+                ImageRequest
+                    .Builder(view.context)
+                    .data(manga)
+                    .target(CoverViewTarget(binding.coverThumbnail))
+                    .setParameter(MangaCoverFetcher.useCustomCover, false)
+                    .build()
             Coil.imageLoader(view.context).enqueue(request)
 
             binding.coverThumbnail.alpha = if (manga.favorite) 0.34f else 1.0f

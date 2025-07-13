@@ -86,7 +86,6 @@ class BrowseController :
     RootSearchInterface,
     FloatingSearchInterface,
     BottomSheetController {
-
     /**
      * Application preferences.
      */
@@ -122,9 +121,7 @@ class BrowseController :
 
     override fun getTitle(): String? = view?.context?.getString(R.string.browse)
 
-    override fun getSearchTitle(): String? {
-        return searchTitle(view?.context?.getString(R.string.sources)?.lowercase(Locale.ROOT))
-    }
+    override fun getSearchTitle(): String? = searchTitle(view?.context?.getString(R.string.sources)?.lowercase(Locale.ROOT))
 
     val presenter = SourcePresenter(this)
 
@@ -138,6 +135,7 @@ class BrowseController :
         binding.sourceRecycler.layoutManager = LinearLayoutManagerAccurateOffset(view.context)
 
         binding.sourceRecycler.adapter = adapter
+        binding.sourceRecycler.addItemDecoration(SourceDividerItemDecoration(view.context))
         adapter?.isSwipeEnabled = true
         adapter?.stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY
         scrollViewWith(
@@ -150,14 +148,15 @@ class BrowseController :
                 if (activityBinding?.bottomNav == null) {
                     setBottomPadding()
                 }
-                deviceRadius = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val wInsets = it.toWindowInsets()
-                    val lCorner = wInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)
-                    val rCorner = wInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_RIGHT)
-                    (lCorner?.radius?.toFloat() ?: 0f) to (rCorner?.radius?.toFloat() ?: 0f)
-                } else {
-                    ogRadius to ogRadius
-                }
+                deviceRadius =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val wInsets = it.toWindowInsets()
+                        val lCorner = wInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)
+                        val rCorner = wInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_RIGHT)
+                        (lCorner?.radius?.toFloat() ?: 0f) to (rCorner?.radius?.toFloat() ?: 0f)
+                    } else {
+                        ogRadius to ogRadius
+                    }
             },
             onBottomNavUpdate = {
                 setBottomPadding()
@@ -167,7 +166,15 @@ class BrowseController :
             activityBinding?.appBar?.lockYPos = true
         }
         binding.sourceRecycler.post {
-            setBottomSheetTabs(if (binding.bottomSheet.root.sheetBehavior.isCollapsed()) 0f else 1f)
+            setBottomSheetTabs(
+                if (binding.bottomSheet.root.sheetBehavior
+                        .isCollapsed()
+                ) {
+                    0f
+                } else {
+                    1f
+                },
+            )
             binding.sourceRecycler.updatePaddingRelative(
                 bottom = (activityBinding?.bottomNav?.height ?: 0) + 58.spToPx,
             )
@@ -177,19 +184,24 @@ class BrowseController :
         requestFilePermissionsSafe(301, preferences)
         binding.bottomSheet.root.onCreate(this)
 
-        preferences.extensionInstaller().asFlow()
+        preferences
+            .extensionInstaller()
+            .asFlow()
             .drop(1)
             .onEach {
                 binding.bottomSheet.root.setCanInstallPrivately(it == ExtensionInstaller.PRIVATE)
-            }
-            .launchIn(viewScope)
+            }.launchIn(viewScope)
 
-        binding.bottomSheet.root.sheetBehavior?.isGestureInsetBottomIgnored = true
+        binding.bottomSheet.root.sheetBehavior
+            ?.isGestureInsetBottomIgnored = true
 
         binding.bottomSheet.root.sheetBehavior?.addBottomSheetCallback(
             object : BottomSheetBehavior
-            .BottomSheetCallback() {
-                override fun onSlide(bottomSheet: View, progress: Float) {
+                .BottomSheetCallback() {
+                override fun onSlide(
+                    bottomSheet: View,
+                    progress: Float,
+                ) {
                     val oldShow = showingExtensions
                     showingExtensions = progress > 0.92f
                     if (oldShow != showingExtensions) {
@@ -211,7 +223,10 @@ class BrowseController :
                     setBottomSheetTabs(max(0f, progress))
                 }
 
-                override fun onStateChanged(p0: View, state: Int) {
+                override fun onStateChanged(
+                    p0: View,
+                    state: Int,
+                ) {
                     if (state == BottomSheetBehavior.STATE_SETTLING) {
                         binding.bottomSheet.root.updatedNestedRecyclers()
                     } else if (state == BottomSheetBehavior.STATE_EXPANDED && binding.bottomSheet.root.isExpanding) {
@@ -221,9 +236,9 @@ class BrowseController :
 
                     binding.bottomSheet.root.apply {
                         if ((
-                            state == BottomSheetBehavior.STATE_COLLAPSED ||
-                                state == BottomSheetBehavior.STATE_EXPANDED ||
-                                state == BottomSheetBehavior.STATE_HIDDEN
+                                state == BottomSheetBehavior.STATE_COLLAPSED ||
+                                    state == BottomSheetBehavior.STATE_EXPANDED ||
+                                    state == BottomSheetBehavior.STATE_HIDDEN
                             ) &&
                             scaleY != 1f
                         ) {
@@ -243,7 +258,8 @@ class BrowseController :
                     if (state == BottomSheetBehavior.STATE_EXPANDED ||
                         state == BottomSheetBehavior.STATE_COLLAPSED
                     ) {
-                        binding.bottomSheet.root.sheetBehavior?.isDraggable = true
+                        binding.bottomSheet.root.sheetBehavior
+                            ?.isDraggable = true
                         showingExtensions = state == BottomSheetBehavior.STATE_EXPANDED
                         binding.bottomSheet.sheetToolbar.isVisible = showingExtensions
                         updateTitleAndMenu()
@@ -254,11 +270,12 @@ class BrowseController :
                         }
                     }
 
-                    retainViewMode = if (state == BottomSheetBehavior.STATE_EXPANDED) {
-                        RetainViewMode.RETAIN_DETACH
-                    } else {
-                        RetainViewMode.RELEASE_DETACH
-                    }
+                    retainViewMode =
+                        if (state == BottomSheetBehavior.STATE_EXPANDED) {
+                            RetainViewMode.RETAIN_DETACH
+                        } else {
+                            RetainViewMode.RELEASE_DETACH
+                        }
                     binding.bottomSheet.sheetLayout.isClickable = state == BottomSheetBehavior.STATE_COLLAPSED
                     binding.bottomSheet.sheetLayout.isFocusable = state == BottomSheetBehavior.STATE_COLLAPSED
                     if (state == BottomSheetBehavior.STATE_COLLAPSED || state == BottomSheetBehavior.STATE_EXPANDED) {
@@ -269,7 +286,8 @@ class BrowseController :
         )
 
         if (showingExtensions) {
-            binding.bottomSheet.root.sheetBehavior?.expand()
+            binding.bottomSheet.root.sheetBehavior
+                ?.expand()
         }
         ogRadius = view.resources.getDimension(R.dimen.rounded_radius)
 
@@ -293,12 +311,19 @@ class BrowseController :
                 view?.context?.getString(R.string.extensions)
             }
         val onExtensionTab = binding.bottomSheet.tabs.selectedTabPosition == 0
-        if (binding.bottomSheet.sheetToolbar.menu.findItem(if (onExtensionTab) R.id.action_search else R.id.action_migration_guide) != null) {
+        if (binding.bottomSheet.sheetToolbar.menu
+                .findItem(if (onExtensionTab) R.id.action_search else R.id.action_migration_guide) !=
+            null
+        ) {
             return
         }
-        val oldSearchView = binding.bottomSheet.sheetToolbar.menu.findItem(R.id.action_search)?.actionView as? SearchView
+        val oldSearchView =
+            binding.bottomSheet.sheetToolbar.menu
+                .findItem(R.id.action_search)
+                ?.actionView as? SearchView
         oldSearchView?.setOnQueryTextListener(null)
-        binding.bottomSheet.sheetToolbar.menu.clear()
+        binding.bottomSheet.sheetToolbar.menu
+            .clear()
         binding.bottomSheet.sheetToolbar.inflateMenu(
             if (binding.bottomSheet.tabs.selectedTabPosition == 0) {
                 R.menu.extension_main
@@ -307,12 +332,15 @@ class BrowseController :
             },
         )
 
-        val id = when (PreferenceValues.MigrationSourceOrder.fromPreference(preferences)) {
-            PreferenceValues.MigrationSourceOrder.Alphabetically -> R.id.action_sort_alpha
-            PreferenceValues.MigrationSourceOrder.MostEntries -> R.id.action_sort_largest
-            PreferenceValues.MigrationSourceOrder.Obsolete -> R.id.action_sort_obsolete
-        }
-        binding.bottomSheet.sheetToolbar.menu.findItem(id)?.isChecked = true
+        val id =
+            when (PreferenceValues.MigrationSourceOrder.fromPreference(preferences)) {
+                PreferenceValues.MigrationSourceOrder.Alphabetically -> R.id.action_sort_alpha
+                PreferenceValues.MigrationSourceOrder.MostEntries -> R.id.action_sort_largest
+                PreferenceValues.MigrationSourceOrder.Obsolete -> R.id.action_sort_obsolete
+            }
+        binding.bottomSheet.sheetToolbar.menu
+            .findItem(id)
+            ?.isChecked = true
 
         // Initialize search option.
         binding.bottomSheet.sheetToolbar.menu.findItem(R.id.action_search)?.let { searchItem ->
@@ -339,15 +367,17 @@ class BrowseController :
 
     private fun setSheetToolbar() {
         binding.bottomSheet.sheetToolbar.setOnMenuItemClickListener { item ->
-            val sorting = when (item.itemId) {
-                R.id.action_sort_alpha -> PreferenceValues.MigrationSourceOrder.Alphabetically
-                R.id.action_sort_largest -> PreferenceValues.MigrationSourceOrder.MostEntries
-                R.id.action_sort_obsolete -> PreferenceValues.MigrationSourceOrder.Obsolete
-                else -> null
-            }
+            val sorting =
+                when (item.itemId) {
+                    R.id.action_sort_alpha -> PreferenceValues.MigrationSourceOrder.Alphabetically
+                    R.id.action_sort_largest -> PreferenceValues.MigrationSourceOrder.MostEntries
+                    R.id.action_sort_obsolete -> PreferenceValues.MigrationSourceOrder.Obsolete
+                    else -> null
+                }
             if (sorting != null) {
                 preferences.migrationSourceOrder().set(sorting.value)
-                binding.bottomSheet.root.presenter.refreshMigrations()
+                binding.bottomSheet.root.presenter
+                    .refreshMigrations()
                 item.isChecked = true
                 return@setOnMenuItemClickListener true
             }
@@ -369,7 +399,8 @@ class BrowseController :
             return@setOnMenuItemClickListener true
         }
         binding.bottomSheet.sheetToolbar.setNavigationOnClickListener {
-            binding.bottomSheet.root.sheetBehavior?.collapse()
+            binding.bottomSheet.root.sheetBehavior
+                ?.collapse()
         }
         updateSheetMenu()
     }
@@ -387,11 +418,14 @@ class BrowseController :
         val bottomSheet = binding.bottomSheet.root
         val halfStepProgress = (max(0.5f, progress) - 0.5f) * 2
         binding.bottomSheet.tabs.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            topMargin = (
+            topMargin =
                 (
-                    activityBinding?.appBar?.paddingTop
-                        ?.minus(9f.dpToPx)
-                        ?.plus(toolbarHeight ?: 0) ?: 0f
+                    (
+                        activityBinding
+                            ?.appBar
+                            ?.paddingTop
+                            ?.minus(9f.dpToPx)
+                            ?.plus(toolbarHeight ?: 0) ?: 0f
                     ) * halfStepProgress
                 ).toInt()
         }
@@ -408,14 +442,16 @@ class BrowseController :
             binding.bottomSheet.sheetLayout,
         )
 
-        val selectedColor = ColorUtils.setAlphaComponent(
-            bottomSheet.context.getResourceColor(R.attr.tabBarIconColor),
-            (progress * 255).toInt(),
-        )
-        val unselectedColor = ColorUtils.setAlphaComponent(
-            bottomSheet.context.getResourceColor(R.attr.actionBarTintColor),
-            153,
-        )
+        val selectedColor =
+            ColorUtils.setAlphaComponent(
+                bottomSheet.context.getResourceColor(R.attr.tabBarIconColor),
+                (progress * 255).toInt(),
+            )
+        val unselectedColor =
+            ColorUtils.setAlphaComponent(
+                bottomSheet.context.getResourceColor(R.attr.actionBarTintColor),
+                153,
+            )
         binding.bottomSheet.pager.alpha = progress * 10
         binding.bottomSheet.tabs.setSelectedTabIndicatorColor(selectedColor)
         binding.bottomSheet.tabs.setTabTextColors(
@@ -443,11 +479,13 @@ class BrowseController :
     private fun setBottomPadding() {
         val bottomBar = activityBinding?.bottomNav
         val pad = bottomBar?.translationY?.minus(bottomBar.height) ?: 0f
-        val padding = max(
-            (-pad).toInt(),
-            view?.rootWindowInsetsCompat?.getBottomGestureInsets() ?: 0,
-        )
-        binding.bottomSheet.root.sheetBehavior?.peekHeight = 56.spToPx + padding
+        val padding =
+            max(
+                (-pad).toInt(),
+                view?.rootWindowInsetsCompat?.getBottomGestureInsets() ?: 0,
+            )
+        binding.bottomSheet.root.sheetBehavior
+            ?.peekHeight = 56.spToPx + padding
         binding.bottomSheet.root.extensionFrameLayout?.binding?.fastScroller?.updateLayoutParams<ViewGroup.MarginLayoutParams> {
             bottomMargin = -pad.toInt()
         }
@@ -455,28 +493,35 @@ class BrowseController :
             bottomMargin = -pad.toInt()
         }
         binding.sourceRecycler.updatePaddingRelative(
-            bottom = (
-                activityBinding?.bottomNav?.height
-                    ?: view?.rootWindowInsetsCompat?.getBottomGestureInsets() ?: 0
+            bottom =
+                (
+                    activityBinding?.bottomNav?.height
+                        ?: view?.rootWindowInsetsCompat?.getBottomGestureInsets() ?: 0
                 ) + 58.spToPx,
         )
     }
 
     override fun showSheet() {
         if (!isBindingInitialized) return
-        binding.bottomSheet.root.sheetBehavior?.expand()
+        binding.bottomSheet.root.sheetBehavior
+            ?.expand()
     }
 
     override fun hideSheet() {
         if (!isBindingInitialized) return
-        binding.bottomSheet.root.sheetBehavior?.collapse()
+        binding.bottomSheet.root.sheetBehavior
+            ?.collapse()
     }
 
     override fun toggleSheet() {
-        if (!binding.bottomSheet.root.sheetBehavior.isCollapsed()) {
-            binding.bottomSheet.root.sheetBehavior?.collapse()
+        if (!binding.bottomSheet.root.sheetBehavior
+                .isCollapsed()
+        ) {
+            binding.bottomSheet.root.sheetBehavior
+                ?.collapse()
         } else {
-            binding.bottomSheet.root.sheetBehavior?.expand()
+            binding.bottomSheet.root.sheetBehavior
+                ?.expand()
         }
     }
 
@@ -484,13 +529,15 @@ class BrowseController :
 
     override fun handleOnBackStarted(backEvent: BackEventCompat) {
         if (showingExtensions && !binding.bottomSheet.root.canStillGoBack()) {
-            binding.bottomSheet.root.sheetBehavior?.startBackProgress(backEvent)
+            binding.bottomSheet.root.sheetBehavior
+                ?.startBackProgress(backEvent)
         }
     }
 
     override fun handleOnBackProgressed(backEvent: BackEventCompat) {
         if (showingExtensions && !binding.bottomSheet.root.canStillGoBack()) {
-            binding.bottomSheet.root.sheetBehavior?.updateBackProgress(backEvent)
+            binding.bottomSheet.root.sheetBehavior
+                ?.updateBackProgress(backEvent)
         } else {
             super.handleOnBackProgressed(backEvent)
         }
@@ -498,7 +545,8 @@ class BrowseController :
 
     override fun handleOnBackCancelled() {
         if (showingExtensions && !binding.bottomSheet.root.canStillGoBack()) {
-            binding.bottomSheet.root.sheetBehavior?.cancelBackProgress()
+            binding.bottomSheet.root.sheetBehavior
+                ?.cancelBackProgress()
         } else {
             super.handleOnBackCancelled()
         }
@@ -508,7 +556,8 @@ class BrowseController :
         if (showingExtensions) {
             if (binding.bottomSheet.root.canGoBack()) {
                 lastScale = binding.bottomSheet.root.scaleX
-                binding.bottomSheet.root.sheetBehavior?.collapse()
+                binding.bottomSheet.root.sheetBehavior
+                    ?.collapse()
             }
             return true
         }
@@ -526,11 +575,15 @@ class BrowseController :
         presenter.onDestroy()
     }
 
-    override fun onChangeStarted(handler: ControllerChangeHandler, type: ControllerChangeType) {
+    override fun onChangeStarted(
+        handler: ControllerChangeHandler,
+        type: ControllerChangeType,
+    ) {
         super.onChangeStarted(handler, type)
         if (!type.isPush) {
             binding.bottomSheet.root.updateExtTitle()
-            binding.bottomSheet.root.presenter.refreshExtensions()
+            binding.bottomSheet.root.presenter
+                .refreshExtensions()
             presenter.updateSources()
             if (type.isEnter && isControllerVisible) {
                 activityBinding?.appBar?.doOnNextLayout {
@@ -549,13 +602,17 @@ class BrowseController :
                 searchView.clearFocus()
             }
         } else {
-            binding.bottomSheet.root.presenter.refreshMigrations()
+            binding.bottomSheet.root.presenter
+                .refreshMigrations()
             updateTitleAndMenu()
         }
         setBottomPadding()
     }
 
-    override fun onChangeEnded(handler: ControllerChangeHandler, type: ControllerChangeType) {
+    override fun onChangeEnded(
+        handler: ControllerChangeHandler,
+        type: ControllerChangeType,
+    ) {
         super.onChangeEnded(handler, type)
         if (type.isEnter) {
             binding.bottomSheet.root.canExpand = true
@@ -567,15 +624,20 @@ class BrowseController :
     override fun onActivityResumed(activity: Activity) {
         super.onActivityResumed(activity)
         if (!isBindingInitialized) return
-        binding.bottomSheet.root.presenter.refreshExtensions()
-        binding.bottomSheet.root.presenter.refreshMigrations()
+        binding.bottomSheet.root.presenter
+            .refreshExtensions()
+        binding.bottomSheet.root.presenter
+            .refreshMigrations()
         setBottomPadding()
         if (showingExtensions) {
             updateSheetMenu()
         }
     }
 
-    override fun onItemClick(view: View, position: Int): Boolean {
+    override fun onItemClick(
+        view: View,
+        position: Int,
+    ): Boolean {
         val item = adapter?.getItem(position) as? SourceItem ?: return false
         val source = item.source
         // Open the catalogue view.
@@ -590,18 +652,22 @@ class BrowseController :
 
         presenter.updateSources()
 
-        snackbar = view?.snack(R.string.source_hidden, Snackbar.LENGTH_INDEFINITE) {
-            anchorView = binding.bottomSheet.root
-            setAction(R.string.undo) {
-                val newCurrent = preferences.hiddenSources().get()
-                preferences.hiddenSources().set(newCurrent - source.id.toString())
-                presenter.updateSources()
+        snackbar =
+            view?.snack(R.string.source_hidden, Snackbar.LENGTH_INDEFINITE) {
+                anchorView = binding.bottomSheet.root
+                setAction(R.string.undo) {
+                    val newCurrent = preferences.hiddenSources().get()
+                    preferences.hiddenSources().set(newCurrent - source.id.toString())
+                    presenter.updateSources()
+                }
             }
-        }
         (activity as? MainActivity)?.setUndoSnackBar(snackbar)
     }
 
-    private fun pinCatalogue(source: Source, isPinned: Boolean) {
+    private fun pinCatalogue(
+        source: Source,
+        isPinned: Boolean,
+    ) {
         val current = preferences.pinnedCatalogues().get()
         if (isPinned) {
             preferences.pinnedCatalogues().set(current - source.id.toString())
@@ -617,8 +683,9 @@ class BrowseController :
      */
     override fun onPinClick(position: Int) {
         val item = adapter?.getItem(position) as? SourceItem ?: return
-        val isPinned = item.isPinned ?: item.header?.code?.equals(SourcePresenter.PINNED_KEY)
-            ?: false
+        val isPinned =
+            item.isPinned ?: item.header?.code?.equals(SourcePresenter.PINNED_KEY)
+                ?: false
         pinCatalogue(item.source, isPinned)
     }
 
@@ -633,16 +700,22 @@ class BrowseController :
     /**
      * Opens a catalogue with the given controller.
      */
-    private fun openCatalogue(source: CatalogueSource, controller: BrowseSourceController) {
+    private fun openCatalogue(
+        source: CatalogueSource,
+        controller: BrowseSourceController,
+    ) {
         if (!preferences.incognitoMode().get()) {
             preferences.lastUsedCatalogueSource().set(source.id)
             if (source !is LocalSource) {
                 val list = preferences.lastUsedSources().get().toMutableSet()
                 list.removeAll { it.startsWith("${source.id}:") }
                 list.add("${source.id}:${Date().time}")
-                val sortedList = list.filter { it.split(":").size == 2 }
-                    .sortedByDescending { it.split(":").last().toLong() }
-                preferences.lastUsedSources()
+                val sortedList =
+                    list
+                        .filter { it.split(":").size == 2 }
+                        .sortedByDescending { it.split(":").last().toLong() }
+                preferences
+                    .lastUsedSources()
                     .set(sortedList.take(2).toSet())
             }
         }
@@ -651,9 +724,14 @@ class BrowseController :
 
     override fun expandSearch() {
         if (showingExtensions) {
-            binding.bottomSheet.root.sheetBehavior?.collapse()
+            binding.bottomSheet.root.sheetBehavior
+                ?.collapse()
         } else {
-            activityBinding?.searchToolbar?.menu?.findItem(R.id.action_search)?.expandActionView()
+            activityBinding
+                ?.searchToolbar
+                ?.menu
+                ?.findItem(R.id.action_search)
+                ?.expandActionView()
         }
     }
 
@@ -663,7 +741,10 @@ class BrowseController :
      * @param menu menu containing options.
      * @param inflater used to load the menu xml.
      */
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+    override fun onCreateOptionsMenu(
+        menu: Menu,
+        inflater: MenuInflater,
+    ) {
         // Inflate menu
         inflater.inflate(R.menu.catalogue_main, menu)
 
@@ -710,7 +791,10 @@ class BrowseController :
     /**
      * Called to update adapter containing sources.
      */
-    fun setSources(sources: List<IFlexible<*>>, lastUsed: SourceItem?) {
+    fun setSources(
+        sources: List<IFlexible<*>>,
+        lastUsed: SourceItem?,
+    ) {
         adapter?.updateDataSet(sources, false)
         setLastUsedSource(lastUsed)
         if (isControllerVisible) {
@@ -730,7 +814,10 @@ class BrowseController :
     }
 
     @Parcelize
-    data class SmartSearchConfig(val origTitle: String, val origMangaId: Long) : Parcelable
+    data class SmartSearchConfig(
+        val origTitle: String,
+        val origMangaId: Long,
+    ) : Parcelable
 
     companion object {
         const val HELP_URL = "https://tachiyomi.org/docs/guides/source-migration"

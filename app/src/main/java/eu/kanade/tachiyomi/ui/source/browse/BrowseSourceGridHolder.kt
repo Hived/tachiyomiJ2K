@@ -37,8 +37,8 @@ class BrowseSourceGridHolder(
     val db: DatabaseHelper = Injekt.get(),
     val prefs: PreferencesHelper = Injekt.get(),
 ) : BrowseSourceHolder(view, adapter) {
-
     private val binding = MangaGridItemBinding.bind(view)
+
     init {
         if (compact) {
             binding.textLayout.isVisible = false
@@ -71,10 +71,13 @@ class BrowseSourceGridHolder(
             binding.coverThumbnail.dispose()
         } else {
             manga.id ?: return
-            val request = ImageRequest.Builder(view.context).data(manga)
-                .target(CoverViewTarget(binding.coverThumbnail, binding.progress))
-                .setParameter(MangaCoverFetcher.useCustomCover, false)
-                .build()
+            val request =
+                ImageRequest
+                    .Builder(view.context)
+                    .data(manga)
+                    .target(CoverViewTarget(binding.coverThumbnail, binding.progress))
+                    .setParameter(MangaCoverFetcher.useCustomCover, false)
+                    .build()
             Coil.imageLoader(view.context).enqueue(request)
 
             binding.coverThumbnail.alpha = if (manga.favorite) 0.34f else 1.0f

@@ -52,11 +52,12 @@ class MangaChapterHistoryGetResolver : DefaultGetResolver<MangaChapterHistory>()
                 historyGetResolver.mapFromCursor(cursor)
             } else {
                 HistoryImpl().apply {
-                    last_read = try {
-                        cursor.getLong(cursor.getColumnIndex(HistoryTable.COL_LAST_READ))
-                    } catch (e: Exception) {
-                        0L
-                    }
+                    last_read =
+                        try {
+                            cursor.getLong(cursor.getColumnIndex(HistoryTable.COL_LAST_READ))
+                        } catch (e: Exception) {
+                            0L
+                        }
                 }
             }
 
@@ -64,6 +65,10 @@ class MangaChapterHistoryGetResolver : DefaultGetResolver<MangaChapterHistory>()
         if (chapter.id != null) {
             manga.id = chapter.manga_id
             manga.url = cursor.getString(cursor.getColumnIndex("mangaUrl"))
+            val chapterUrlIndex = cursor.getColumnIndex("chapterUrl")
+            if (chapterUrlIndex >= 0) {
+                chapter.url = cursor.getString(chapterUrlIndex)
+            }
         }
         if (history.id != null) chapter.id = history.chapter_id
 

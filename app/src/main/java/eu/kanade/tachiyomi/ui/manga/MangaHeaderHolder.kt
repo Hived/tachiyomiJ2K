@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.ui.manga
 
-import android.animation.AnimatorInflater
 import android.annotation.SuppressLint
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
@@ -12,6 +10,7 @@ import android.os.Build
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
@@ -19,6 +18,7 @@ import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.text.buildSpannedString
 import androidx.core.text.scale
+import androidx.core.view.children
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -27,6 +27,7 @@ import androidx.transition.TransitionSet
 import androidx.vectordrawable.graphics.drawable.AnimatedVectorDrawableCompat
 import coil.request.CachePolicy
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonGroup
 import com.google.android.material.chip.Chip
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.models.Manga
@@ -41,7 +42,6 @@ import eu.kanade.tachiyomi.util.lang.toNormalized
 import eu.kanade.tachiyomi.util.system.getResourceColor
 import eu.kanade.tachiyomi.util.system.isInNightMode
 import eu.kanade.tachiyomi.util.system.isLTR
-import eu.kanade.tachiyomi.util.view.resetStrokeColor
 
 @SuppressLint("ClickableViewAccessibility")
 class MangaHeaderHolder(
@@ -50,17 +50,18 @@ class MangaHeaderHolder(
     startExpanded: Boolean,
     private val isTablet: Boolean = false,
 ) : BaseFlexibleViewHolder(view, adapter) {
-
-    val binding: MangaHeaderItemBinding? = try {
-        MangaHeaderItemBinding.bind(view)
-    } catch (e: Exception) {
-        null
-    }
-    private val chapterBinding: ChapterHeaderItemBinding? = try {
-        ChapterHeaderItemBinding.bind(view)
-    } catch (e: Exception) {
-        null
-    }
+    val binding: MangaHeaderItemBinding? =
+        try {
+            MangaHeaderItemBinding.bind(view)
+        } catch (e: Exception) {
+            null
+        }
+    private val chapterBinding: ChapterHeaderItemBinding? =
+        try {
+            ChapterHeaderItemBinding.bind(view)
+        } catch (e: Exception) {
+            null
+        }
 
     private var showReadingButton = true
     private var showMoreButton = true
@@ -96,7 +97,8 @@ class MangaHeaderHolder(
                 }
             }
             mangaSummary.setOnLongClickListener {
-                if (mangaSummary.isTextSelectable && !adapter.recyclerView.canScrollVertically(
+                if (mangaSummary.isTextSelectable &&
+                    !adapter.recyclerView.canScrollVertically(
                         -1,
                     )
                 ) {
@@ -185,7 +187,7 @@ class MangaHeaderHolder(
 
     private fun expandDesc(animated: Boolean = false) {
         binding ?: return
-        if (binding.moreButton.visibility == View.VISIBLE || isTablet) {
+        if (binding.moreButton.isVisible || isTablet) {
             androidx.transition.TransitionManager.endTransitions(adapter.controller.binding.recycler)
             binding.mangaSummary.maxLines = Integer.MAX_VALUE
             binding.mangaSummary.setTextIsSelectable(true)
@@ -202,13 +204,16 @@ class MangaHeaderHolder(
             binding.mangaAuthor.maxLines = Integer.MAX_VALUE
             binding.mangaSummary.requestFocus()
             if (animated) {
-                val transition = TransitionSet()
-                    .addTransition(androidx.transition.ChangeBounds())
-                    .addTransition(androidx.transition.Fade())
-                    .addTransition(androidx.transition.Slide())
-                transition.duration = binding.root.resources.getInteger(
-                    android.R.integer.config_shortAnimTime,
-                ).toLong()
+                val transition =
+                    TransitionSet()
+                        .addTransition(androidx.transition.ChangeBounds())
+                        .addTransition(androidx.transition.Fade())
+                        .addTransition(androidx.transition.Slide())
+                transition.duration =
+                    binding.root.resources
+                        .getInteger(
+                            android.R.integer.config_shortAnimTime,
+                        ).toLong()
                 androidx.transition.TransitionManager.beginDelayedTransition(
                     adapter.controller.binding.recycler,
                     transition,
@@ -223,10 +228,11 @@ class MangaHeaderHolder(
         binding.moreButtonGroup.isVisible = !isTablet
         if (animated) {
             androidx.transition.TransitionManager.endTransitions(adapter.controller.binding.recycler)
-            val animVector = AnimatedVectorDrawableCompat.create(
-                binding.root.context,
-                R.drawable.anim_expand_less_to_more,
-            )
+            val animVector =
+                AnimatedVectorDrawableCompat.create(
+                    binding.root.context,
+                    R.drawable.anim_expand_less_to_more,
+                )
             binding.moreButton.setCompoundDrawablesRelativeWithIntrinsicBounds(
                 null,
                 null,
@@ -234,12 +240,15 @@ class MangaHeaderHolder(
                 null,
             )
             animVector?.start()
-            val transition = TransitionSet()
-                .addTransition(androidx.transition.ChangeBounds())
-                .addTransition(androidx.transition.Fade())
-            transition.duration = binding.root.resources.getInteger(
-                android.R.integer.config_shortAnimTime,
-            ).toLong()
+            val transition =
+                TransitionSet()
+                    .addTransition(androidx.transition.ChangeBounds())
+                    .addTransition(androidx.transition.Fade())
+            transition.duration =
+                binding.root.resources
+                    .getInteger(
+                        android.R.integer.config_shortAnimTime,
+                    ).toLong()
             androidx.transition.TransitionManager.beginDelayedTransition(
                 adapter.controller.binding.recycler,
                 transition,
@@ -260,18 +269,23 @@ class MangaHeaderHolder(
 
     private fun setDescription() {
         if (binding != null) {
-            val desc = adapter.controller.mangaPresenter().manga.description
-            binding.mangaSummary.text = when {
-                desc.isNullOrBlank() -> itemView.context.getString(R.string.no_description)
-                binding.mangaSummary.maxLines != Int.MAX_VALUE -> desc.replace(
-                    Regex(
-                        "[\\r\\n\\s*]{2,}",
-                        setOf(RegexOption.MULTILINE),
-                    ),
-                    "\n",
-                )
-                else -> desc.trim()
-            }
+            val desc =
+                adapter.controller
+                    .mangaPresenter()
+                    .manga.description
+            binding.mangaSummary.text =
+                when {
+                    desc.isNullOrBlank() -> itemView.context.getString(R.string.no_description)
+                    binding.mangaSummary.maxLines != Int.MAX_VALUE ->
+                        desc.replace(
+                            Regex(
+                                "[\\r\\n\\s*]{2,}",
+                                setOf(RegexOption.MULTILINE),
+                            ),
+                            "\n",
+                        )
+                    else -> desc.trim()
+                }
         }
     }
 
@@ -290,7 +304,10 @@ class MangaHeaderHolder(
     }
 
     @SuppressLint("SetTextI18n")
-    fun bind(item: MangaHeaderItem, manga: Manga) {
+    fun bind(
+        item: MangaHeaderItem,
+        manga: Manga,
+    ) {
         val presenter = adapter.delegate.mangaPresenter()
         if (binding == null) {
             if (chapterBinding != null) {
@@ -318,8 +335,10 @@ class MangaHeaderHolder(
 
         binding.mangaSummary.post {
             if (binding.subItemGroup.isVisible) {
-                if (binding.mangaSummary.lineCount < 3 && manga.genre.isNullOrBlank() &&
-                    binding.moreButton.isVisible && manga.initialized
+                if (binding.mangaSummary.lineCount < 3 &&
+                    manga.genre.isNullOrBlank() &&
+                    binding.moreButton.isVisible &&
+                    manga.initialized
                 ) {
                     expandDesc()
                     binding.lessButton.isVisible = false
@@ -333,27 +352,30 @@ class MangaHeaderHolder(
                 expand()
             }
         }
-        binding.mangaSummaryLabel.text = itemView.context.getString(
-            R.string.about_this_,
-            manga.seriesType(itemView.context),
-        )
+        binding.mangaSummaryLabel.text =
+            itemView.context.getString(
+                R.string.about_this_,
+                manga.seriesType(itemView.context),
+            )
         with(binding.favoriteButton) {
-            icon = ContextCompat.getDrawable(
-                itemView.context,
-                when {
-                    item.isLocked -> R.drawable.ic_lock_24dp
-                    manga.favorite -> R.drawable.ic_heart_24dp
-                    else -> R.drawable.ic_heart_outline_24dp
-                },
-            )
-            text = itemView.resources.getString(
-                when {
-                    item.isLocked -> R.string.unlock
-                    manga.favorite -> R.string.in_library
-                    else -> R.string.add_to_library
-                },
-            )
-            checked(!item.isLocked && manga.favorite)
+            icon =
+                ContextCompat.getDrawable(
+                    itemView.context,
+                    when {
+                        item.isLocked -> R.drawable.ic_lock_24dp
+                        manga.favorite -> R.drawable.ic_heart_24dp
+                        else -> R.drawable.ic_heart_outline_24dp
+                    },
+                )
+            text =
+                itemView.resources.getString(
+                    when {
+                        item.isLocked -> R.string.unlock
+                        manga.favorite -> R.string.in_library
+                        else -> R.string.add_to_library
+                    },
+                )
+            isChecked = !item.isLocked && manga.favorite
             adapter.delegate.setFavButtonPopup(this)
         }
         binding.trueBackdrop.setBackgroundColor(
@@ -365,19 +387,21 @@ class MangaHeaderHolder(
 
         with(binding.trackButton) {
             isVisible = presenter.hasTrackers()
-            text = itemView.context.getString(
-                if (tracked) {
-                    R.string.tracked
-                } else {
-                    R.string.tracking
-                },
-            )
+            text =
+                itemView.context.getString(
+                    if (tracked) {
+                        R.string.tracked
+                    } else {
+                        R.string.tracking
+                    },
+                )
 
-            icon = ContextCompat.getDrawable(
-                itemView.context,
-                if (tracked) R.drawable.ic_check_24dp else R.drawable.ic_sync_24dp,
-            )
-            checked(tracked)
+            icon =
+                ContextCompat.getDrawable(
+                    itemView.context,
+                    if (tracked) R.drawable.ic_check_24dp else R.drawable.ic_sync_24dp,
+                )
+            isChecked = tracked
         }
 
         with(binding.startReadingButton) {
@@ -385,29 +409,30 @@ class MangaHeaderHolder(
             isVisible = presenter.chapters.isNotEmpty() && !item.isLocked && !adapter.hasFilter()
             showReadingButton = isVisible
             isEnabled = (nextChapter != null)
-            text = if (nextChapter != null) {
-                val number = adapter.decimalFormat.format(nextChapter.chapter_number.toDouble())
-                if (nextChapter.chapter_number > 0) {
-                    resources.getString(
-                        if (nextChapter.last_page_read > 0) {
-                            R.string.continue_reading_chapter_
-                        } else {
-                            R.string.start_reading_chapter_
-                        },
-                        number,
-                    )
+            text =
+                if (nextChapter != null) {
+                    val number = adapter.decimalFormat.format(nextChapter.chapter_number.toDouble())
+                    if (nextChapter.chapter_number > 0) {
+                        resources.getString(
+                            if (nextChapter.last_page_read > 0) {
+                                R.string.continue_reading_chapter_
+                            } else {
+                                R.string.start_reading_chapter_
+                            },
+                            number,
+                        )
+                    } else {
+                        resources.getString(
+                            if (nextChapter.last_page_read > 0) {
+                                R.string.continue_reading
+                            } else {
+                                R.string.start_reading
+                            },
+                        )
+                    }
                 } else {
-                    resources.getString(
-                        if (nextChapter.last_page_read > 0) {
-                            R.string.continue_reading
-                        } else {
-                            R.string.start_reading
-                        },
-                    )
+                    resources.getString(R.string.all_chapters_read)
                 }
-            } else {
-                resources.getString(R.string.all_chapters_read)
-            }
         }
 
         val count = presenter.chapters.size
@@ -430,27 +455,28 @@ class MangaHeaderHolder(
                     else -> R.string.unknown_status
                 },
             )
-            )
+        )
         with(binding.mangaSource) {
             val enabledLanguages = presenter.preferences.enabledLanguages().get()
 
-            text = buildSpannedString {
-                append(presenter.source.nameBasedOnEnabledLanguages(enabledLanguages))
-                if (presenter.source is SourceManager.StubSource &&
-                    presenter.source.name != presenter.source.id.toString()
-                ) {
-                    scale(0.9f) {
-                        append(" (${context.getString(R.string.source_not_installed)})")
+            text =
+                buildSpannedString {
+                    append(presenter.source.nameBasedOnEnabledLanguages(enabledLanguages))
+                    if (presenter.source is SourceManager.StubSource &&
+                        presenter.source.name != presenter.source.id.toString()
+                    ) {
+                        scale(0.9f) {
+                            append(" (${context.getString(R.string.source_not_installed)})")
+                        }
                     }
                 }
-            }
         }
 
         binding.filtersText.text = presenter.currentFilters()
 
         if (manga.isLocal()) {
-            binding.webviewButton.isVisible = false
-            binding.shareButton.isVisible = false
+            (binding.buttonLayout as ViewGroup).removeView(binding.webviewButton)
+            binding.buttonLayout.removeView(binding.shareButton)
         }
 
         if (!manga.initialized) return
@@ -460,60 +486,73 @@ class MangaHeaderHolder(
         }
     }
 
-    private fun setGenreTags(binding: MangaHeaderItemBinding, manga: Manga) {
+    private fun setGenreTags(
+        binding: MangaHeaderItemBinding,
+        manga: Manga,
+    ) {
         with(binding.mangaGenresTags) {
             removeAllViews()
             val dark = context.isInNightMode()
-            val amoled = adapter.delegate.mangaPresenter().preferences.themeDarkAmoled().get()
+            val amoled =
+                adapter.delegate
+                    .mangaPresenter()
+                    .preferences
+                    .themeDarkAmoled()
+                    .get()
             val baseTagColor = context.getResourceColor(R.attr.background)
             val bgArray = FloatArray(3)
             val accentArray = FloatArray(3)
 
             ColorUtils.colorToHSL(baseTagColor, bgArray)
             ColorUtils.colorToHSL(adapter.delegate.accentColor() ?: context.getResourceColor(R.attr.colorSecondary), accentArray)
-            val downloadedColor = ColorUtils.setAlphaComponent(
+            val downloadedColor =
+                ColorUtils.setAlphaComponent(
+                    ColorUtils.HSLToColor(
+                        floatArrayOf(
+                            if (adapter.delegate.accentColor() != null) accentArray[0] else bgArray[0],
+                            bgArray[1],
+                            (
+                                when {
+                                    amoled && dark -> 0.1f
+                                    dark -> 0.225f
+                                    else -> 0.85f
+                                }
+                            ),
+                        ),
+                    ),
+                    199,
+                )
+            val textColor =
                 ColorUtils.HSLToColor(
                     floatArrayOf(
-                        if (adapter.delegate.accentColor() != null) accentArray[0] else bgArray[0],
-                        bgArray[1],
-                        (
-                            when {
-                                amoled && dark -> 0.1f
-                                dark -> 0.225f
-                                else -> 0.85f
-                            }
-                            ),
+                        accentArray[0],
+                        accentArray[1],
+                        if (dark) 0.945f else 0.175f,
                     ),
-                ),
-                199,
-            )
-            val textColor = ColorUtils.HSLToColor(
-                floatArrayOf(
-                    accentArray[0],
-                    accentArray[1],
-                    if (dark) 0.945f else 0.175f,
-                ),
-            )
-            val states = arrayOf(
-                intArrayOf(-android.R.attr.state_activated),
-                intArrayOf(),
-            )
-            val colors = intArrayOf(
-                downloadedColor,
-                ColorUtils.blendARGB(
+                )
+            val states =
+                arrayOf(
+                    intArrayOf(-android.R.attr.state_activated),
+                    intArrayOf(),
+                )
+            val colors =
+                intArrayOf(
                     downloadedColor,
-                    context.getResourceColor(R.attr.colorControlNormal),
-                    0.25f,
-                ),
-            )
+                    ColorUtils.blendARGB(
+                        downloadedColor,
+                        context.getResourceColor(R.attr.colorControlNormal),
+                        0.25f,
+                    ),
+                )
             val colorStateList = ColorStateList(states, colors)
             if (manga.genre.isNullOrBlank().not()) {
                 (manga.getGenres() ?: emptyList()).map { genreText ->
-                    val chip = LayoutInflater.from(binding.root.context).inflate(
-                        R.layout.genre_chip,
-                        this,
-                        false,
-                    ) as Chip
+                    val chip =
+                        LayoutInflater.from(binding.root.context).inflate(
+                            R.layout.genre_chip,
+                            this,
+                            false,
+                        ) as Chip
                     val id = View.generateViewId()
                     chip.id = id
                     chip.chipBackgroundColor = colorStateList
@@ -536,25 +575,6 @@ class MangaHeaderHolder(
         binding ?: return
         binding.mangaSummary.setTextIsSelectable(false)
         binding.mangaSummary.clearFocus()
-    }
-
-    private fun MaterialButton.checked(checked: Boolean) {
-        if (checked) {
-            stateListAnimator = AnimatorInflater.loadStateListAnimator(context, R.animator.icon_btn_state_list_anim)
-            backgroundTintList = ColorStateList.valueOf(
-                ColorUtils.blendARGB(
-                    adapter.delegate.accentColor() ?: context.getResourceColor(R.attr.colorSecondary),
-                    context.getResourceColor(R.attr.background),
-                    0.706f,
-                ),
-            )
-            strokeColor = ColorStateList.valueOf(Color.TRANSPARENT)
-        } else {
-            stateListAnimator = null
-            resetStrokeColor()
-            backgroundTintList =
-                ColorStateList.valueOf(context.getResourceColor(R.attr.background))
-        }
     }
 
     fun setTopHeight(newHeight: Int) {
@@ -584,36 +604,78 @@ class MangaHeaderHolder(
                 adapter.delegate.coverColor()
                     ?: trueBackdrop.context.getResourceColor(R.attr.background),
             )
-            TextViewCompat.setCompoundDrawableTintList(moreButton, ColorStateList.valueOf(accentColor))
+            TextViewCompat.setCompoundDrawableTintList(
+                moreButton,
+                ColorStateList.valueOf(accentColor),
+            )
             moreButton.setTextColor(accentColor)
-            TextViewCompat.setCompoundDrawableTintList(lessButton, ColorStateList.valueOf(accentColor))
+            TextViewCompat.setCompoundDrawableTintList(
+                lessButton,
+                ColorStateList.valueOf(accentColor),
+            )
             lessButton.setTextColor(accentColor)
-            shareButton.imageTintList = ColorStateList.valueOf(accentColor)
-            webviewButton.imageTintList = ColorStateList.valueOf(accentColor)
+            webviewButton.iconTint = ColorStateList.valueOf(accentColor)
+            shareButton.iconTint = ColorStateList.valueOf(accentColor)
+
             filterButton.imageTintList = ColorStateList.valueOf(accentColor)
 
-            val states = arrayOf(
-                intArrayOf(-android.R.attr.state_enabled),
-                intArrayOf(),
-            )
+            val states =
+                arrayOf(
+                    intArrayOf(-android.R.attr.state_enabled),
+                    intArrayOf(),
+                )
 
-            val colors = intArrayOf(
-                ColorUtils.setAlphaComponent(root.context.getResourceColor(R.attr.tabBarIconInactive), 43),
-                accentColor,
-            )
+            val colors =
+                intArrayOf(
+                    ColorUtils.setAlphaComponent(
+                        root.context.getResourceColor(R.attr.tabBarIconInactive),
+                        43,
+                    ),
+                    accentColor,
+                )
 
             startReadingButton.backgroundTintList = ColorStateList(states, colors)
 
-            val textColors = intArrayOf(
-                ColorUtils.setAlphaComponent(root.context.getResourceColor(R.attr.colorOnSurface), 97),
-                root.context.getResourceColor(android.R.attr.textColorPrimaryInverse),
-            )
+            val textColors =
+                intArrayOf(
+                    ColorUtils.setAlphaComponent(
+                        root.context.getResourceColor(R.attr.colorOnSurface),
+                        97,
+                    ),
+                    root.context.getResourceColor(android.R.attr.textColorPrimaryInverse),
+                )
+            val overflowButton =
+                (buttonLayout as? MaterialButtonGroup)
+                    ?.children
+                    ?.first { it.tag == MaterialButtonGroup.OVERFLOW_BUTTON_TAG } as? MaterialButton
+            overflowButton ?.iconTint = ColorStateList.valueOf(accentColor)
             startReadingButton.setTextColor(ColorStateList(states, textColors))
             trackButton.iconTint = ColorStateList.valueOf(accentColor)
             favoriteButton.iconTint = ColorStateList.valueOf(accentColor)
+            val checkedStates =
+                arrayOf(
+                    intArrayOf(android.R.attr.state_checked),
+                    intArrayOf(),
+                )
+            val checkedColors =
+                intArrayOf(
+                    root.context.getResourceColor(R.attr.colorOnBackground),
+                    accentColor,
+                )
+            val bgCheckedColors =
+                intArrayOf(
+                    ColorUtils.blendARGB(
+                        accentColor,
+                        root.context.getResourceColor(R.attr.background),
+                        0.706f,
+                    ),
+                    root.context.getResourceColor(R.attr.background),
+                )
+            trackButton.iconTint = ColorStateList(checkedStates, checkedColors)
+            favoriteButton.iconTint = ColorStateList(checkedStates, checkedColors)
+            trackButton.backgroundTintList = ColorStateList(checkedStates, bgCheckedColors)
+            favoriteButton.backgroundTintList = ColorStateList(checkedStates, bgCheckedColors)
             if (updateAll) {
-                trackButton.checked(trackButton.stateListAnimator != null)
-                favoriteButton.checked(favoriteButton.stateListAnimator != null)
                 setGenreTags(this, manga)
             }
         }
@@ -624,24 +686,26 @@ class MangaHeaderHolder(
         val presenter = adapter.delegate.mangaPresenter()
         val tracked = presenter.isTracked()
         with(binding.trackButton) {
-            text = itemView.context.getString(
-                if (tracked) {
-                    R.string.tracked
-                } else {
-                    R.string.tracking
-                },
-            )
+            text =
+                itemView.context.getString(
+                    if (tracked) {
+                        R.string.tracked
+                    } else {
+                        R.string.tracking
+                    },
+                )
 
-            icon = ContextCompat.getDrawable(
-                itemView.context,
-                if (tracked) {
-                    R.drawable
-                        .ic_check_24dp
-                } else {
-                    R.drawable.ic_sync_24dp
-                },
-            )
-            checked(tracked)
+            icon =
+                ContextCompat.getDrawable(
+                    itemView.context,
+                    if (tracked) {
+                        R.drawable
+                            .ic_check_24dp
+                    } else {
+                        R.drawable.ic_sync_24dp
+                    },
+                )
+            isChecked = tracked
         }
     }
 
@@ -688,7 +752,8 @@ class MangaHeaderHolder(
                         val yOffset = (bitmap.height / 2 * 0.33).toInt()
 
                         binding.backdrop.setImageDrawable(
-                            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height - yOffset)
+                            Bitmap
+                                .createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height - yOffset)
                                 .toDrawable(itemView.resources),
                         )
                         applyBlur()

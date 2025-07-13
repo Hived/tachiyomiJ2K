@@ -13,10 +13,9 @@ enum class LibrarySort(
     @StringRes private val dynamicStringRes: Int = stringRes,
     @DrawableRes private val dynamicIconRes: Int = iconRes,
 ) {
-
     Title(0, R.string.title, R.drawable.ic_sort_by_alpha_24dp),
     LastRead(1, R.string.last_read, R.drawable.ic_recent_read_outline_24dp, 3),
-    LatestChapter(2, R.string.latest_chapter, R.drawable.ic_new_releases_24dp, 1),
+    LatestChapter(2, R.string.latest_chapter, R.drawable.ic_new_releases_outline_24dp, 1),
     Unread(3, R.string.unread, R.drawable.ic_eye_24dp, 2),
     TotalChapters(4, R.string.total_chapters, R.drawable.ic_sort_by_numeric_24dp),
     DateAdded(5, R.string.date_added, R.drawable.ic_heart_outline_24dp),
@@ -39,15 +38,16 @@ enum class LibrarySort(
         get() = if (this == DragAndDrop) 'D' else 'b' + catValue * 2
 
     fun serialize(): String {
-        val type = when (this) {
-            LastRead -> "LAST_READ"
-            Unread -> "UNREAD_COUNT"
-            TotalChapters -> "TOTAL_CHAPTERS"
-            LatestChapter -> "LATEST_CHAPTER"
-            DateFetched -> "CHAPTER_FETCH_DATE"
-            DateAdded -> "DATE_ADDED"
-            else -> "ALPHABETICAL"
-        }
+        val type =
+            when (this) {
+                LastRead -> "LAST_READ"
+                Unread -> "UNREAD_COUNT"
+                TotalChapters -> "TOTAL_CHAPTERS"
+                LatestChapter -> "LATEST_CHAPTER"
+                DateFetched -> "CHAPTER_FETCH_DATE"
+                DateAdded -> "DATE_ADDED"
+                else -> "ALPHABETICAL"
+            }
         return "$type,ASCENDING"
     }
 
@@ -60,13 +60,12 @@ enum class LibrarySort(
     val hasInvertedSort: Boolean
         get() = this in listOf(LastRead, DateAdded, LatestChapter, DateFetched)
 
-    fun menuSheetItem(isDynamic: Boolean): MaterialMenuSheet.MenuSheetItem {
-        return MaterialMenuSheet.MenuSheetItem(
+    fun menuSheetItem(isDynamic: Boolean): MaterialMenuSheet.MenuSheetItem =
+        MaterialMenuSheet.MenuSheetItem(
             mainValue,
             iconRes(isDynamic),
             stringRes(isDynamic),
         )
-    }
 
     companion object {
         fun deserialize(serialized: String): LibrarySort {
@@ -90,6 +89,7 @@ enum class LibrarySort(
         }
 
         fun valueOf(value: Int) = entries.find { it.mainValue == value }
+
         fun valueOf(char: Char?) = entries.find { it.categoryValue == char || it.categoryValueDescending == char }
     }
 }

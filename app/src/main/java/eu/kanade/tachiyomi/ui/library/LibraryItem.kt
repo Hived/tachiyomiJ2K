@@ -32,8 +32,8 @@ class LibraryItem(
     header: LibraryHeaderItem,
     private val context: Context?,
     private val preferences: PreferencesHelper = Injekt.get(),
-) : AbstractSectionableItem<LibraryHolder, LibraryHeaderItem>(header), IFilterable<String> {
-
+) : AbstractSectionableItem<LibraryHolder, LibraryHeaderItem>(header),
+    IFilterable<String> {
     var downloadCount = -1
     var unreadType = 2
     var sourceLanguage: String? = null
@@ -49,15 +49,17 @@ class LibraryItem(
     val hideReadingButton: Boolean
         get() = preferences.hideStartReadingButton().get()
 
-    override fun getLayoutRes(): Int {
-        return if (libraryLayout == LAYOUT_LIST || manga.isBlank()) {
+    override fun getLayoutRes(): Int =
+        if (libraryLayout == LAYOUT_LIST || manga.isBlank()) {
             R.layout.manga_list_item
         } else {
             R.layout.manga_grid_item
         }
-    }
 
-    override fun createViewHolder(view: View, adapter: FlexibleAdapter<IFlexible<RecyclerView.ViewHolder>>): LibraryHolder {
+    override fun createViewHolder(
+        view: View,
+        adapter: FlexibleAdapter<IFlexible<RecyclerView.ViewHolder>>,
+    ): LibraryHolder {
         val parent = adapter.recyclerView
         return if (parent is AutofitRecyclerView) {
             val libraryLayout = libraryLayout
@@ -79,10 +81,11 @@ class LibraryItem(
                         )
                     }
                     if (isFixedSize) {
-                        binding.constraintLayout.layoutParams = FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                        )
+                        binding.constraintLayout.layoutParams =
+                            FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                            )
                         binding.coverThumbnail.maxHeight = Int.MAX_VALUE
                         binding.coverThumbnail.minimumHeight = 0
                         binding.constraintLayout.minHeight = 0
@@ -100,12 +103,13 @@ class LibraryItem(
                     }
                     binding.setBGAndFG(libraryLayout)
                 }
-                val gridHolder = LibraryGridHolder(
-                    view,
-                    adapter as LibraryCategoryAdapter,
-                    libraryLayout == LAYOUT_COMPACT_GRID,
-                    isFixedSize,
-                )
+                val gridHolder =
+                    LibraryGridHolder(
+                        view,
+                        adapter as LibraryCategoryAdapter,
+                        libraryLayout == LAYOUT_COMPACT_GRID,
+                        isFixedSize,
+                    )
                 if (!isFixedSize) {
                     gridHolder.setFreeformCoverRatio(manga, parent)
                 }
@@ -137,17 +141,11 @@ class LibraryItem(
     /**
      * Returns true if this item is draggable.
      */
-    override fun isDraggable(): Boolean {
-        return !manga.isBlank() && header.category.isDragAndDrop
-    }
+    override fun isDraggable(): Boolean = !manga.isBlank() && header.category.isDragAndDrop
 
-    override fun isEnabled(): Boolean {
-        return !manga.isBlank()
-    }
+    override fun isEnabled(): Boolean = !manga.isBlank()
 
-    override fun isSelectable(): Boolean {
-        return !manga.isBlank()
-    }
+    override fun isSelectable(): Boolean = !manga.isBlank()
 
     /**
      * Filters a manga depending on a query.
@@ -173,7 +171,10 @@ class LibraryItem(
             }
     }
 
-    private fun containsGenre(tag: String, genres: List<String>?): Boolean {
+    private fun containsGenre(
+        tag: String,
+        genres: List<String>?,
+    ): Boolean {
         if (tag.trim().isEmpty()) return true
         context ?: return false
         val seriesType by lazy { manga.seriesType(context, sourceManager) }

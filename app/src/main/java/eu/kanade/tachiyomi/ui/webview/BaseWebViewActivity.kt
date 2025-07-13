@@ -18,6 +18,7 @@ import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsCompat.Type.displayCutout
 import androidx.core.view.WindowInsetsCompat.Type.systemBars
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isInvisible
@@ -38,7 +39,6 @@ import eu.kanade.tachiyomi.util.system.setDefaultSettings
 import eu.kanade.tachiyomi.util.view.setStyle
 
 open class BaseWebViewActivity : BaseActivity<WebviewActivityBinding>() {
-
     private var bundle: Bundle? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,45 +64,49 @@ open class BaseWebViewActivity : BaseActivity<WebviewActivityBinding>() {
         ViewCompat.setOnApplyWindowInsetsListener(container) { v, insets ->
             val contextView = window?.decorView?.findViewById<View>(R.id.action_mode_bar)
             contextView?.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                leftMargin = insets.getInsets(systemBars()).left
-                rightMargin = insets.getInsets(systemBars()).right
+                leftMargin = insets.getInsets(systemBars() or displayCutout()).left
+                rightMargin = insets.getInsets(systemBars() or displayCutout()).right
             }
             // Consume any horizontal insets and pad all content in. There's not much we can do
             // with horizontal insets
             v.updatePadding(
-                left = insets.getInsets(systemBars()).left,
-                right = insets.getInsets(systemBars()).right,
+                left = insets.getInsets(systemBars() or displayCutout()).left,
+                right = insets.getInsets(systemBars() or displayCutout()).right,
             )
-            WindowInsetsCompat.Builder(insets).setInsets(
-                systemBars(),
-                Insets.of(
-                    0,
-                    insets.getInsets(systemBars()).top,
-                    0,
-                    insets.getInsets(systemBars()).bottom,
-                ),
-            ).build()
+            WindowInsetsCompat
+                .Builder(insets)
+                .setInsets(
+                    systemBars(),
+                    Insets.of(
+                        0,
+                        insets.getInsets(systemBars()).top,
+                        0,
+                        insets.getInsets(systemBars()).bottom,
+                    ),
+                ).build()
         }
         binding.swipeRefresh.setStyle()
         binding.swipeRefresh.setOnRefreshListener {
             refreshPage()
         }
 
-        window.statusBarColor = ColorUtils.setAlphaComponent(
-            getResourceColor(R.attr.colorSurface),
-            255,
-        )
+        window.statusBarColor =
+            ColorUtils.setAlphaComponent(
+                getResourceColor(R.attr.colorSurface),
+                255,
+            )
 
         ViewCompat.setOnApplyWindowInsetsListener(content) { v, insets ->
             // if pure white theme on a device that does not support dark status bar
             /*if (getResourceColor(android.R.attr.statusBarColor) != Color.TRANSPARENT)
                 window.statusBarColor = Color.BLACK
             else window.statusBarColor = getResourceColor(R.attr.colorPrimary)*/
-            window.navigationBarColor = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-                Color.BLACK
-            } else {
-                getResourceColor(R.attr.colorPrimaryVariant)
-            }
+            window.navigationBarColor =
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                    Color.BLACK
+                } else {
+                    getResourceColor(R.attr.colorPrimaryVariant)
+                }
             v.setPadding(
                 insets.getInsets(systemBars()).left,
                 insets.getInsets(systemBars()).top,
@@ -120,22 +124,34 @@ open class BaseWebViewActivity : BaseActivity<WebviewActivityBinding>() {
         if (bundle == null) {
             binding.webview.setDefaultSettings()
 
-            binding.webview.webChromeClient = object : WebChromeClient() {
-                override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                    binding.progressBar.isVisible = true
-                    binding.progressBar.progress = newProgress
-                    if (newProgress == 100) {
-                        binding.progressBar.isInvisible = true
-                        invalidateOptionsMenu()
+            binding.webview.webChromeClient =
+                object : WebChromeClient() {
+                    override fun onProgressChanged(
+                        view: WebView?,
+                        newProgress: Int,
+                    ) {
+                        binding.progressBar.isVisible = true
+                        if (newProgress == 0) {
+                            binding.progressBar.isIndeterminate = true
+                        } else {
+                            binding.progressBar.isIndeterminate = false
+                            binding.progressBar.progress = newProgress
+                        }
+                        if (newProgress == 100) {
+                            binding.progressBar.isInvisible = true
+                            invalidateOptionsMenu()
+                        }
+                        super.onProgressChanged(view, newProgress)
                     }
-                    super.onProgressChanged(view, newProgress)
-                }
 
-                override fun onReceivedTitle(view: WebView?, title: String?) {
-                    super.onReceivedTitle(view, title)
-                    this@BaseWebViewActivity.title = title
+                    override fun onReceivedTitle(
+                        view: WebView?,
+                        title: String?,
+                    ) {
+                        super.onReceivedTitle(view, title)
+                        this@BaseWebViewActivity.title = title
+                    }
                 }
-            }
             val marginB = binding.webview.marginBottom
             ViewCompat.setOnApplyWindowInsetsListener(binding.swipeRefresh) { v, insets ->
                 val bottomInset = insets.getInsets(systemBars()).bottom
@@ -150,7 +166,8 @@ open class BaseWebViewActivity : BaseActivity<WebviewActivityBinding>() {
             }
         }
 
-        preferences.incognitoMode()
+        preferences
+            .incognitoMode()
             .asImmediateFlowIn(lifecycleScope) {
                 SecureActivityDelegate.setSecure(this)
             }
@@ -182,13 +199,14 @@ open class BaseWebViewActivity : BaseActivity<WebviewActivityBinding>() {
         wic.isAppearanceLightStatusBars = themeValue.data == -1
         wic.isAppearanceLightNavigationBars = themeValue.data == -1
 
-        val attrs = theme.obtainStyledAttributes(
-            intArrayOf(
-                R.attr.colorSurface,
-                R.attr.actionBarTintColor,
-                R.attr.colorPrimaryVariant,
-            ),
-        )
+        val attrs =
+            theme.obtainStyledAttributes(
+                intArrayOf(
+                    R.attr.colorSurface,
+                    R.attr.actionBarTintColor,
+                    R.attr.colorPrimaryVariant,
+                ),
+            )
         val colorSurface = attrs.getColor(0, 0)
         val actionBarTintColor = attrs.getColor(1, 0)
         val colorPrimaryVariant = attrs.getColor(2, 0)

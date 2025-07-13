@@ -8,19 +8,23 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.viewbinding.ViewBinding
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import eu.kanade.tachiyomi.ui.main.MainActivity
+import eu.kanade.tachiyomi.util.view.backgroundColor
 
 /**
  * Edge to Edge BottomSheetDialog that uses a custom theme and settings to extend pass the nav bar
  */
 @Suppress("LeakingThis")
-abstract class E2EBottomSheetDialog<VB : ViewBinding>(activity: Activity) :
-    BottomSheetDialog(activity) {
+abstract class E2EBottomSheetDialog<VB : ViewBinding>(
+    activity: Activity,
+) : BottomSheetDialog(activity) {
     protected val binding: VB
 
     protected val sheetBehavior: BottomSheetBehavior<*>
     protected open var recyclerView: RecyclerView? = null
 
     private val isLight: Boolean
+
     init {
         binding = createBinding(activity.layoutInflater)
         setContentView(binding.root)
@@ -33,7 +37,9 @@ abstract class E2EBottomSheetDialog<VB : ViewBinding>(activity: Activity) :
         isLight = aWic.isAppearanceLightStatusBars
         window?.let { window ->
             val wic = WindowInsetsControllerCompat(window, binding.root)
-            window.navigationBarColor = activity.window.navigationBarColor
+            window.navigationBarColor =
+                (activity as? MainActivity)?.binding?.navBar?.backgroundColor
+                    ?: window.navigationBarColor
             wic.isAppearanceLightNavigationBars = isLight
         }
         contentView.requestLayout()
@@ -44,7 +50,10 @@ abstract class E2EBottomSheetDialog<VB : ViewBinding>(activity: Activity) :
         recyclerView?.let { recyclerView ->
             recyclerView.addOnScrollListener(
                 object : RecyclerView.OnScrollListener() {
-                    override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                    override fun onScrollStateChanged(
+                        recyclerView: RecyclerView,
+                        newState: Int,
+                    ) {
                         super.onScrollStateChanged(recyclerView, newState)
                         if (newState == RecyclerView.SCROLL_STATE_IDLE ||
                             newState == RecyclerView.SCROLL_STATE_SETTLING

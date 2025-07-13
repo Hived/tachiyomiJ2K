@@ -24,7 +24,7 @@
     <color name="tachiyomi_primaryInverse">#0057CE</color>
 
     <!-- Application Colors -->
-    <color name="primaryVariantTachiyomi">#202125</color>
+    <color name="primaryVariantTachiyomi">#28282E</color>
     <color name="colorPrimaryInactive">@color/md_white_1000_76</color>
     <color name="onPrimaryTachiyomi">#071D39</color>
     <color name="primaryTachiyomi">#78bcff</color>
@@ -42,7 +42,7 @@
     <color name="textColorPrimaryInverse">@color/md_black_1000_87</color>
     <color name="strong_divider">@color/md_white_1000_38</color>
     <color name="divider">@color/md_white_1000_12</color>
-    <color name="download">@color/material_green_700</color>
+    <color name="download">#0a7e07</color>
     <color name="holo_red">#cc4444</color>
     <color name="splashIcon">@color/md_white_1000</color>
     <color name="downloadBadgeDayNight">@color/download_badge_light</color>
@@ -66,7 +66,7 @@
     <!-- Flat Lime Theme -->
     <color name="primaryLime">#7CF7A5</color>
     <color name="secondaryLime">#4AF88A</color>
-    <color name="primaryVariantLime">@color/primaryVariantTachiyomi</color>
+    <color name="primaryVariantLime">#121A14</color>
     <color name="onPrimaryLime">#043314</color>
     <color name="primaryInverseLime">#09933c</color>
     <color name="backgroundLime">#202125</color>

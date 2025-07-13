@@ -16,6 +16,7 @@ import android.view.LayoutInflater
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import com.google.android.material.progressindicator.CircularProgressIndicator
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.databinding.ReaderErrorBinding
@@ -24,7 +25,6 @@ import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.settings.ReaderBackgroundColor
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderErrorView
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
-import eu.kanade.tachiyomi.ui.reader.viewer.ReaderProgressBar
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerConfig.ZoomType
 import eu.kanade.tachiyomi.util.system.ImageUtil
 import eu.kanade.tachiyomi.util.system.ImageUtil.isPagePadded
@@ -61,8 +61,8 @@ class PagerPageHolder(
     val viewer: PagerViewer,
     val page: ReaderPage,
     private var extraPage: ReaderPage? = null,
-) : ReaderPageImageView(viewer.activity), ViewPagerAdapter.PositionableView {
-
+) : ReaderPageImageView(viewer.activity),
+    ViewPagerAdapter.PositionableView {
     /**
      * Item that identifies this view. Needed by the adapter to not recreate views.
      */
@@ -136,15 +136,16 @@ class PagerPageHolder(
                 else -> ThemeUtil.readerBackgroundColor(theme)
             },
         )
-        progressBar.foregroundTintList = ColorStateList.valueOf(
-            context.getResourceColor(
-                if (isInvertedFromTheme()) {
-                    R.attr.colorPrimaryInverse
-                } else {
-                    R.attr.colorPrimary
-                },
-            ),
-        )
+        progressBar.foregroundTintList =
+            ColorStateList.valueOf(
+                context.getResourceColor(
+                    if (isInvertedFromTheme()) {
+                        R.attr.colorPrimaryInverse
+                    } else {
+                        R.attr.colorPrimary
+                    },
+                ),
+            )
     }
 
     override fun onImageLoaded() {
@@ -204,44 +205,50 @@ class PagerPageHolder(
         statusJob?.cancel()
 
         val loader = page.chapter.pageLoader ?: return
-        loadJob = scope.launch {
-            loader.loadPage(page)
-        }
-        statusJob = scope.launch {
-            page.statusFlow.collectLatest { processStatus(it) }
-        }
+        loadJob =
+            scope.launch {
+                loader.loadPage(page)
+            }
+        statusJob =
+            scope.launch {
+                page.statusFlow.collectLatest { processStatus(it) }
+            }
         val extraPage = extraPage ?: return
-        extraLoadJob = scope.launch {
-            loader.loadPage(extraPage)
-        }
-        extraStatusJob = scope.launch {
-            extraPage.statusFlow.collectLatest { processStatus2(it) }
-        }
+        extraLoadJob =
+            scope.launch {
+                loader.loadPage(extraPage)
+            }
+        extraStatusJob =
+            scope.launch {
+                extraPage.statusFlow.collectLatest { processStatus2(it) }
+            }
     }
 
     private fun launchProgressJob() {
         progressJob?.cancel()
-        progressJob = scope.launch {
-            page.progressFlow.collectLatest { value ->
-                progress = value
-                if (extraPage == null) {
-                    progressBar.setProgress(progress)
-                } else {
-                    progressBar.setProgress(((progress + extraProgress) / 2 * 0.95f).roundToInt())
+        progressJob =
+            scope.launch {
+                page.progressFlow.collectLatest { value ->
+                    progress = value
+                    if (extraPage == null) {
+                        setProgress(progress)
+                    } else {
+                        setProgress(((progress + extraProgress) / 2 * 0.95f).roundToInt())
+                    }
                 }
             }
-        }
     }
 
     private fun launchProgressJob2() {
         val extraPage = extraPage ?: return
         extraProgressJob?.cancel()
-        extraProgressJob = scope.launch {
-            extraPage.progressFlow.collectLatest { value ->
-                extraProgress = value
-                progressBar.setProgress(((progress + extraProgress) / 2 * 0.95f).roundToInt())
+        extraProgressJob =
+            scope.launch {
+                extraPage.progressFlow.collectLatest { value ->
+                    extraProgress = value
+                    setProgress(((progress + extraProgress) / 2 * 0.95f).roundToInt())
+                }
             }
-        }
     }
 
     fun onPageSelected(forward: Boolean?) {
@@ -312,7 +319,8 @@ class PagerPageHolder(
     private fun pan(fn: (PointF, SubsamplingScaleImageView) -> PointF) {
         (pageView as? SubsamplingScaleImageView)?.let { view ->
             val target = fn(view.center ?: return, view)
-            view.animateCenter(target)!!
+            view
+                .animateCenter(target)!!
                 .withEasing(SubsamplingScaleImageView.EASE_OUT_QUAD)
                 .withDuration(250)
                 .withInterruptible(true)
@@ -322,26 +330,33 @@ class PagerPageHolder(
 
     private fun SubsamplingScaleImageView.landscapeZoom(forward: Boolean?) {
         forward ?: return
-        if (viewer.config.landscapeZoom && viewer.config.imageScaleType == SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE && sWidth > sHeight && scale == minScale) {
+        if (viewer.config.landscapeZoom &&
+            viewer.config.imageScaleType == SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE &&
+            sWidth > sHeight &&
+            scale == minScale
+        ) {
             handler.postDelayed(
                 {
-                    val point = when (viewer.config.imageZoomType) {
-                        ZoomType.Left -> if (forward) PointF(0F, 0F) else PointF(sWidth.toFloat(), 0F)
-                        ZoomType.Right -> if (forward) PointF(sWidth.toFloat(), 0F) else PointF(0F, 0F)
-                        ZoomType.Center -> center.also { it?.y = 0F }
-                    }
+                    val point =
+                        when (viewer.config.imageZoomType) {
+                            ZoomType.Left -> if (forward) PointF(0F, 0F) else PointF(sWidth.toFloat(), 0F)
+                            ZoomType.Right -> if (forward) PointF(sWidth.toFloat(), 0F) else PointF(0F, 0F)
+                            ZoomType.Center -> center.also { it?.y = 0F }
+                        }
 
                     val rootInsets = viewer.activity.window.decorView.rootWindowInsets
-                    val topInsets = if (viewer.activity.isSplitScreen) {
-                        0f
-                    } else {
-                        rootInsets?.topCutoutInset()?.toFloat() ?: 0f
-                    }
-                    val bottomInsets = if (viewer.activity.isSplitScreen) {
-                        0f
-                    } else {
-                        rootInsets?.bottomCutoutInset()?.toFloat() ?: 0f
-                    }
+                    val topInsets =
+                        if (viewer.activity.isSplitScreen) {
+                            0f
+                        } else {
+                            rootInsets?.topCutoutInset()?.toFloat() ?: 0f
+                        }
+                    val bottomInsets =
+                        if (viewer.activity.isSplitScreen) {
+                            0f
+                        } else {
+                            rootInsets?.bottomCutoutInset()?.toFloat() ?: 0f
+                        }
                     val targetScale = (height.toFloat() - topInsets - bottomInsets) / sHeight.toFloat()
                     animateScaleAndCenter(min(targetScale, minScale * 2), point)!!
                         .withDuration(500)
@@ -470,93 +485,105 @@ class PagerPageHolder(
     private fun setImage() {
         progressBar.isVisible = true
         if (extraPage == null) {
-            progressBar.completeAndFadeOut()
+            setProgress(100)
         } else {
-            progressBar.setProgress(95)
+            setProgress(95)
         }
         errorLayout?.isVisible = false
 
         cancelReadImageHeader()
 
-        readImageHeaderJob = scope.launchIO {
-            val streamFn = page.stream ?: return@launchIO
-            val streamFn2 = extraPage?.stream
+        readImageHeaderJob =
+            scope.launchIO {
+                val streamFn = page.stream ?: return@launchIO
+                val streamFn2 = extraPage?.stream
 
-            var openStream: InputStream? = null
-            try {
-                val stream = streamFn().buffered(16)
+                var openStream: InputStream? = null
+                try {
+                    val stream = streamFn().buffered(16)
 
-                val stream2 = streamFn2?.invoke()?.buffered(16)
-                openStream = this@PagerPageHolder.mergeOrSplitPages(stream, stream2)
-                val isAnimated = ImageUtil.isAnimatedAndSupported(stream) ||
-                    (stream2?.let { ImageUtil.isAnimatedAndSupported(stream2) } ?: false)
-                withUIContext {
-                    val bgColor = ReaderBackgroundColor.fromPreference(viewer.config.readerTheme)
-                    if (!isAnimated) {
-                        if (bgColor.isSmartColor) {
-                            val bgType = getBGType(viewer.config.readerTheme, context)
-                            if (page.bg != null && page.bgType == bgType) {
-                                setImage(openStream, false, imageConfig)
-                                pageView?.background = page.bg
-                            }
-                            // if the user switches to automatic when pages are already cached, the bg needs to be loaded
-                            else {
-                                val bytesArray = openStream.readBytes()
-                                val bytesStream = bytesArray.inputStream()
-                                setImage(bytesStream, false, imageConfig)
-                                closeStreams(bytesStream)
-
-                                try {
-                                    pageView?.background = setBG(bytesArray)
-                                } catch (e: Exception) {
-                                    Timber.e(e.localizedMessage)
-                                    pageView?.background = ColorDrawable(Color.WHITE)
-                                } finally {
-                                    page.bg = pageView?.background
-                                    page.bgType = bgType
+                    val stream2 = streamFn2?.invoke()?.buffered(16)
+                    openStream = this@PagerPageHolder.mergeOrSplitPages(stream, stream2)
+                    val isAnimated =
+                        ImageUtil.isAnimatedAndSupported(stream) ||
+                            (stream2?.let { ImageUtil.isAnimatedAndSupported(stream2) } ?: false)
+                    withUIContext {
+                        val bgColor = ReaderBackgroundColor.fromPreference(viewer.config.readerTheme)
+                        if (!isAnimated) {
+                            if (bgColor.isSmartColor) {
+                                val bgType = getBGType(viewer.config.readerTheme, context)
+                                if (page.bg != null && page.bgType == bgType) {
+                                    setImage(openStream, false, imageConfig)
+                                    pageView?.background = page.bg
                                 }
+                                // if the user switches to automatic when pages are already cached, the bg needs to be loaded
+                                else {
+                                    val bytesArray = openStream.readBytes()
+                                    val bytesStream = bytesArray.inputStream()
+                                    setImage(bytesStream, false, imageConfig)
+                                    closeStreams(bytesStream)
+
+                                    try {
+                                        pageView?.background = setBG(bytesArray)
+                                    } catch (e: Exception) {
+                                        Timber.e(e.localizedMessage)
+                                        pageView?.background = ColorDrawable(Color.WHITE)
+                                    } finally {
+                                        page.bg = pageView?.background
+                                        page.bgType = bgType
+                                    }
+                                }
+                            } else {
+                                setImage(openStream, false, imageConfig)
                             }
                         } else {
-                            setImage(openStream, false, imageConfig)
-                        }
-                    } else {
-                        setImage(openStream, true, imageConfig)
-                        if (bgColor.isSmartColor && page.bg != null) {
-                            pageView?.background = page.bg
+                            setImage(openStream, true, imageConfig)
+                            if (bgColor.isSmartColor && page.bg != null) {
+                                pageView?.background = page.bg
+                            }
                         }
                     }
-                }
-            } catch (_: Exception) {
-                try {
-                    openStream?.let { closeStreams(it) }
                 } catch (_: Exception) {
+                    try {
+                        openStream?.let { closeStreams(it) }
+                    } catch (_: Exception) {
+                    }
                 }
             }
-        }
     }
 
     private val imageConfig: Config
-        get() = Config(
-            zoomDuration = viewer.config.doubleTapAnimDuration,
-            minimumScaleType = viewer.config.imageScaleType,
-            cropBorders = viewer.config.imageCropBorders,
-            zoomStartPosition = viewer.config.imageZoomType,
-            landscapeZoom = viewer.config.landscapeZoom,
-            insetInfo = InsetInfo(
-                cutoutBehavior = viewer.config.cutoutBehavior,
-                topCutoutInset = viewer.activity.window.decorView.rootWindowInsets?.topCutoutInset()?.toFloat() ?: 0f,
-                bottomCutoutInset = viewer.activity.window.decorView.rootWindowInsets?.bottomCutoutInset()?.toFloat() ?: 0f,
-                scaleTypeIsFullFit = viewer.config.scaleTypeIsFullFit(),
-                isFullscreen = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                    viewer.config.isFullscreen && !viewer.activity.isInMultiWindowMode,
-                isSplitScreen = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && viewer.activity.isInMultiWindowMode,
-                insets = viewer.activity.window.decorView.rootWindowInsets,
-            ),
-            hingeGapSize = viewer.config.hingeGapSize,
-        )
+        get() =
+            Config(
+                zoomDuration = viewer.config.doubleTapAnimDuration,
+                minimumScaleType = viewer.config.imageScaleType,
+                cropBorders = viewer.config.imageCropBorders,
+                zoomStartPosition = viewer.config.imageZoomType,
+                landscapeZoom = viewer.config.landscapeZoom,
+                insetInfo =
+                    InsetInfo(
+                        cutoutBehavior = viewer.config.cutoutBehavior,
+                        topCutoutInset =
+                            viewer.activity.window.decorView.rootWindowInsets
+                                ?.topCutoutInset()
+                                ?.toFloat() ?: 0f,
+                        bottomCutoutInset =
+                            viewer.activity.window.decorView.rootWindowInsets
+                                ?.bottomCutoutInset()
+                                ?.toFloat() ?: 0f,
+                        scaleTypeIsFullFit = viewer.config.scaleTypeIsFullFit(),
+                        isFullscreen =
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                                viewer.config.isFullscreen &&
+                                !viewer.activity.isInMultiWindowMode,
+                        isSplitScreen = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && viewer.activity.isInMultiWindowMode,
+                        insets = viewer.activity.window.decorView.rootWindowInsets,
+                    ),
+                hingeGapSize = viewer.config.hingeGapSize,
+            )
 
-    private suspend fun setBG(bytesArray: ByteArray): Drawable {
-        return withContext(Default) {
+    private suspend fun setBG(bytesArray: ByteArray): Drawable =
+        withContext(Default) {
             val preferences by injectLazy<PreferencesHelper>()
             ImageUtil.autoSetBackground(
                 BitmapFactory.decodeByteArray(
@@ -568,7 +595,6 @@ class PagerPageHolder(
                 context,
             )
         }
-    }
 
     /**
      * Called when the page has an error.
@@ -596,22 +622,26 @@ class PagerPageHolder(
     /**
      * Creates a new progress bar.
      */
-    private fun createProgressBar(): ReaderProgressBar {
-        return ReaderProgressBar(context, null).apply {
+    private fun createProgressBar(): CircularProgressIndicator =
+        CircularProgressIndicator(context).apply {
+            isIndeterminate = false
+            setWavelength(10.dpToPx)
+            progress = 10
+            waveAmplitude = 1.dpToPx
+            waveSpeed = 20
             val size = 48.dpToPx
-            layoutParams = LayoutParams(size, size).apply {
-                gravity = Gravity.CENTER
-            }
+            layoutParams =
+                LayoutParams(size, size).apply {
+                    gravity = Gravity.CENTER
+                }
         }
-    }
 
-    private fun isInvertedFromTheme(): Boolean {
-        return when (backgroundColor) {
+    private fun isInvertedFromTheme(): Boolean =
+        when (backgroundColor) {
             Color.WHITE -> context.isInNightMode()
             Color.BLACK -> !context.isInNightMode()
             else -> false
         }
-    }
 
     private fun showErrorLayout(withOpenInWebView: Boolean): ReaderErrorBinding {
         if (errorLayout == null) {
@@ -621,15 +651,19 @@ class PagerPageHolder(
                 page.chapter.pageLoader?.retryPage(page)
             }
         }
-        val imageUrl = if (withOpenInWebView) {
-            page.imageUrl
-        } else {
-            viewer.activity.viewModel.getChapterUrl(page.chapter.chapter)
-        }
+        val imageUrl =
+            if (withOpenInWebView) {
+                page.imageUrl
+            } else {
+                viewer.activity.viewModel.getChapterUrl(page.chapter.chapter)
+            }
         return errorLayout!!.configureView(imageUrl)
     }
 
-    private suspend fun mergeOrSplitPages(imageStream: InputStream, imageStream2: InputStream?): InputStream {
+    private suspend fun mergeOrSplitPages(
+        imageStream: InputStream,
+        imageStream2: InputStream?,
+    ): InputStream {
         if (ImageUtil.isAnimatedAndSupported(imageStream)) {
             withContext(Dispatchers.IO) { imageStream.reset() }
             if (page.longPage == null) {
@@ -638,25 +672,26 @@ class PagerPageHolder(
                     splitDoublePages()
                 }
             }
-            scope.launchUI { progressBar.completeAndFadeOut() }
+            scope.launchUI { setProgress(100) }
             return imageStream
         }
         if (page.longPage == true && viewer.config.splitPages) {
             val imageBytes = imageStream.readBytes()
-            val imageBitmap = try {
-                BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-            } catch (e: Exception) {
-                closeStreams(imageStream)
-                Timber.e("Cannot split page ${e.message}")
-                return imageBytes.inputStream()
-            }
+            val imageBitmap =
+                try {
+                    BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                } catch (e: Exception) {
+                    closeStreams(imageStream)
+                    Timber.e("Cannot split page ${e.message}")
+                    return imageBytes.inputStream()
+                }
             val isLTR = (viewer !is R2LPagerViewer).xor(viewer.config.invertDoublePages)
             return ImageUtil.splitBitmap(imageBitmap, (page.firstHalf == false).xor(!isLTR)) {
                 scope.launchUI {
                     if (it == 100) {
-                        progressBar.completeAndFadeOut()
+                        setProgress(100)
                     } else {
-                        progressBar.setProgress(it)
+                        setProgress(it)
                     }
                 }
             }
@@ -664,15 +699,16 @@ class PagerPageHolder(
         if (imageStream2 == null) {
             if (viewer.config.splitPages && page.longPage == null) {
                 val imageBytes = imageStream.readBytes()
-                val imageBitmap = try {
-                    BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-                } catch (e: Exception) {
-                    closeStreams(imageStream)
-                    page.longPage = true
-                    splitDoublePages()
-                    Timber.e("Cannot split page ${e.message}")
-                    return imageBytes.inputStream()
-                }
+                val imageBitmap =
+                    try {
+                        BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                    } catch (e: Exception) {
+                        closeStreams(imageStream)
+                        page.longPage = true
+                        splitDoublePages()
+                        Timber.e("Cannot split page ${e.message}")
+                        return imageBytes.inputStream()
+                    }
                 val height = imageBitmap.height
                 val width = imageBitmap.width
                 return if (height < width) {
@@ -683,9 +719,9 @@ class PagerPageHolder(
                     return ImageUtil.splitBitmap(imageBitmap, !isLTR) {
                         scope.launchUI {
                             if (it == 100) {
-                                progressBar.completeAndFadeOut()
+                                setProgress(100)
                             } else {
-                                progressBar.setProgress(it)
+                                setProgress(it)
                             }
                         }
                     }
@@ -698,16 +734,17 @@ class PagerPageHolder(
         }
         if (page.fullPage == true) return supportHingeIfThere(imageStream)
         val imageBytes = imageStream.readBytes()
-        val imageBitmap = try {
-            BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-        } catch (e: Exception) {
-            closeStreams(imageStream, imageStream2)
-            page.fullPage = true
-            splitDoublePages()
-            Timber.e("Cannot combine pages ${e.message}")
-            return supportHingeIfThere(imageBytes.inputStream())
-        }
-        scope.launchUI { progressBar.setProgress(96) }
+        val imageBitmap =
+            try {
+                BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+            } catch (e: Exception) {
+                closeStreams(imageStream, imageStream2)
+                page.fullPage = true
+                splitDoublePages()
+                Timber.e("Cannot combine pages ${e.message}")
+                return supportHingeIfThere(imageBytes.inputStream())
+            }
+        scope.launchUI { setProgress(96) }
         val height = imageBitmap.height
         val width = imageBitmap.width
 
@@ -729,7 +766,8 @@ class PagerPageHolder(
                     (
                         (viewer.config.shiftDoublePage && !thirdPageIsStart) ||
                             extraPage?.isEndPage == true
-                        ) && oldValue != true
+                    ) &&
+                    oldValue != true
                 ) {
                     viewer.activity.shiftDoublePages(extraPageIsEnd || thirdPageIsStart, extraPage)
                 } else {
@@ -750,7 +788,9 @@ class PagerPageHolder(
             if (extraPage?.index == 1 && extraPage?.isEndPage == null) {
                 earlyImageBitmap2 = setExtraPageBitmap(imageBytes2, isLTR)
             }
-            if (page.index == 1 && page.isEndPage == true && viewer.config.shiftDoublePage &&
+            if (page.index == 1 &&
+                page.isEndPage == true &&
+                viewer.config.shiftDoublePage &&
                 (isFirstPageNotEnd || isThirdPageNotEnd)
             ) {
                 shiftDoublePages(false)
@@ -775,24 +815,27 @@ class PagerPageHolder(
             shiftDoublePages(true)
             extraPage = null
             return supportHingeIfThere(imageBytes.inputStream())
-        } else if (shouldShiftAnyway && page.index == 1 &&
-            viewer.config.shiftDoublePage && (isFirstPageNotEnd && isThirdPageNotEnd)
+        } else if (shouldShiftAnyway &&
+            page.index == 1 &&
+            viewer.config.shiftDoublePage &&
+            (isFirstPageNotEnd && isThirdPageNotEnd)
         ) {
             shiftDoublePages(false)
             return supportHingeIfThere(imageBytes.inputStream())
         }
 
-        val imageBitmap2 = earlyImageBitmap2 ?: try {
-            BitmapFactory.decodeByteArray(imageBytes2, 0, imageBytes2.size)
-        } catch (e: Exception) {
-            closeStreams(imageStream, imageStream2)
-            extraPage?.fullPage = true
-            page.isolatedPage = true
-            splitDoublePages()
-            Timber.e("Cannot combine pages ${e.message}")
-            return supportHingeIfThere(imageBytes.inputStream())
-        }
-        scope.launchUI { progressBar.setProgress(97) }
+        val imageBitmap2 =
+            earlyImageBitmap2 ?: try {
+                BitmapFactory.decodeByteArray(imageBytes2, 0, imageBytes2.size)
+            } catch (e: Exception) {
+                closeStreams(imageStream, imageStream2)
+                extraPage?.fullPage = true
+                page.isolatedPage = true
+                splitDoublePages()
+                Timber.e("Cannot combine pages ${e.message}")
+                return supportHingeIfThere(imageBytes.inputStream())
+            }
+        scope.launchUI { setProgress(97) }
         val height2 = imageBitmap2.height
         val width2 = imageBitmap2.width
 
@@ -806,10 +849,14 @@ class PagerPageHolder(
         val bg = ThemeUtil.readerBackgroundColor(viewer.config.readerTheme)
         closeStreams(imageStream, imageStream2)
         extraPage?.let { extraPage ->
-            val shouldSubShiftAnyway = !viewer.activity.manuallyShiftedPages &&
-                extraPage.isStartPage == true && extraPage.endPageConfidence == 0
-            if (extraPage.index <= 2 && extraPage.endPageConfidence != 3 &&
-                extraPage.isStartPage == null && extraPage.fullPage == null
+            val shouldSubShiftAnyway =
+                !viewer.activity.manuallyShiftedPages &&
+                    extraPage.isStartPage == true &&
+                    extraPage.endPageConfidence == 0
+            if (extraPage.index <= 2 &&
+                extraPage.endPageConfidence != 3 &&
+                extraPage.isStartPage == null &&
+                extraPage.fullPage == null
             ) {
                 extraPage.startPageConfidence = imageBitmap2.isPagePadded(rightSide = isLTR)
                 if (extraPage.isStartPage == true) {
@@ -832,20 +879,33 @@ class PagerPageHolder(
         return ImageUtil.mergeBitmaps(imageBitmap, imageBitmap2, isLTR, bg, viewer.config.hingeGapSize, context) {
             scope.launchUI {
                 if (it == 100) {
-                    progressBar.completeAndFadeOut()
+                    setProgress(100)
                 } else {
-                    progressBar.setProgress(it)
+                    setProgress(it)
                 }
             }
         }
     }
 
-    private fun setExtraPageBitmap(imageBytes2: ByteArray, isLTR: Boolean): Bitmap? {
-        val earlyImageBitmap2 = try {
-            BitmapFactory.decodeByteArray(imageBytes2, 0, imageBytes2.size)
-        } catch (_: Exception) {
-            return null
+    fun setProgress(progress: Int) {
+        val scaledProgress = 85 * progress / 100 + 10
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            progressBar.setProgress(scaledProgress, true)
+        } else {
+            progressBar.progress = scaledProgress
         }
+    }
+
+    private fun setExtraPageBitmap(
+        imageBytes2: ByteArray,
+        isLTR: Boolean,
+    ): Bitmap? {
+        val earlyImageBitmap2 =
+            try {
+                BitmapFactory.decodeByteArray(imageBytes2, 0, imageBytes2.size)
+            } catch (_: Exception) {
+                return null
+            }
         val paddedPageConfidence = earlyImageBitmap2.isPagePadded(rightSide = !isLTR)
         if (paddedPageConfidence == 3) {
             extraPage?.endPageConfidence = paddedPageConfidence
@@ -856,17 +916,18 @@ class PagerPageHolder(
     private suspend fun supportHingeIfThere(imageStream: InputStream): InputStream {
         if (viewer.config.hingeGapSize > 0 && !ImageUtil.isAnimatedAndSupported(imageStream)) {
             val imageBytes = imageStream.readBytes()
-            val imageBitmap = try {
-                BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-            } catch (e: Exception) {
-                closeStreams(imageStream)
-                val wasNotFullPage = page.fullPage != true
-                page.fullPage = true
-                if (wasNotFullPage) {
-                    splitDoublePages()
+            val imageBitmap =
+                try {
+                    BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                } catch (e: Exception) {
+                    closeStreams(imageStream)
+                    val wasNotFullPage = page.fullPage != true
+                    page.fullPage = true
+                    if (wasNotFullPage) {
+                        splitDoublePages()
+                    }
+                    return imageBytes.inputStream()
                 }
-                return imageBytes.inputStream()
-            }
             val isLTR = (viewer !is R2LPagerViewer).xor(viewer.config.invertDoublePages)
             val bg = ThemeUtil.readerBackgroundColor(viewer.config.readerTheme)
             return ImageUtil.padSingleImage(
@@ -881,7 +942,10 @@ class PagerPageHolder(
         return imageStream
     }
 
-    private suspend fun closeStreams(stream1: InputStream?, stream2: InputStream? = null) {
+    private suspend fun closeStreams(
+        stream1: InputStream?,
+        stream2: InputStream? = null,
+    ) {
         withContext(Dispatchers.IO) {
             stream1?.close()
             stream2?.close()
@@ -905,11 +969,13 @@ class PagerPageHolder(
         }
     }
 
-    private fun getBGType(readerTheme: Int, context: Context): Int {
-        return if (ReaderBackgroundColor.fromPreference(readerTheme) == ReaderBackgroundColor.SMART_THEME) {
+    private fun getBGType(
+        readerTheme: Int,
+        context: Context,
+    ): Int =
+        if (ReaderBackgroundColor.fromPreference(readerTheme) == ReaderBackgroundColor.SMART_THEME) {
             if (context.isInNightMode()) 2 else 1
         } else {
             0 + (context.resources.configuration?.orientation ?: 0) * 10
         } + item.hashCode()
-    }
 }

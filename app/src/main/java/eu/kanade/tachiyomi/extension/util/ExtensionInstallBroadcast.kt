@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.extension.util.ExtensionInstallBroadcast.Companion.EX
 import eu.kanade.tachiyomi.extension.util.ExtensionInstallBroadcast.Companion.PACKAGE_INSTALLED_ACTION
 import eu.kanade.tachiyomi.extension.util.ExtensionInstallBroadcast.Companion.packageInstallStep
 import eu.kanade.tachiyomi.util.system.DeviceUtil
+import eu.kanade.tachiyomi.util.system.activityOptionsBackgroundOptions
 import eu.kanade.tachiyomi.util.system.toast
 import uy.kohesive.injekt.injectLazy
 
@@ -26,7 +27,10 @@ import uy.kohesive.injekt.injectLazy
  * Broadcast used to install extensions, that receives callbacks from package installer.
  */
 class ExtensionInstallBroadcast : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
         try {
             if (PACKAGE_INSTALLED_ACTION == intent.action) {
                 packageInstallStep(context, intent)
@@ -37,9 +41,10 @@ class ExtensionInstallBroadcast : BroadcastReceiver() {
             val packageInstaller = context.packageManager.packageInstaller
             val data = UniFile.fromUri(context, intent.data).openInputStream()
 
-            val params = SessionParams(
-                SessionParams.MODE_FULL_INSTALL,
-            )
+            val params =
+                SessionParams(
+                    SessionParams.MODE_FULL_INSTALL,
+                )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 params.setRequireUserAction(USER_ACTION_NOT_REQUIRED)
             }
@@ -49,17 +54,25 @@ class ExtensionInstallBroadcast : BroadcastReceiver() {
                 data.copyTo(packageInSession)
             }
 
-            val newIntent = Intent(context, ExtensionInstallBroadcast::class.java)
-                .setAction(PACKAGE_INSTALLED_ACTION)
-                .putExtra(ExtensionInstaller.EXTRA_DOWNLOAD_ID, downloadId)
-                .putExtra(EXTRA_SESSION_ID, sessionId)
+            val newIntent =
+                Intent(context, ExtensionInstallBroadcast::class.java)
+                    .setAction(PACKAGE_INSTALLED_ACTION)
+                    .putExtra(ExtensionInstaller.EXTRA_DOWNLOAD_ID, downloadId)
+                    .putExtra(EXTRA_SESSION_ID, sessionId)
 
-            val mutableFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                PendingIntent.FLAG_MUTABLE
-            } else {
-                0
-            }
-            val pendingIntent = PendingIntent.getBroadcast(context, downloadId.hashCode(), newIntent, PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag)
+            val mutableFlag =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_MUTABLE
+                } else {
+                    0
+                }
+            val pendingIntent =
+                PendingIntent.getBroadcast(
+                    context,
+                    downloadId.hashCode(),
+                    newIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag,
+                )
             val statusReceiver = pendingIntent.intentSender
             session.commit(statusReceiver)
             val extensionManager: ExtensionManager by injectLazy()
@@ -81,7 +94,10 @@ class ExtensionInstallBroadcast : BroadcastReceiver() {
         const val PACKAGE_INSTALLED_ACTION =
             "eu.kanade.tachiyomi.SESSION_API_PACKAGE_INSTALLED"
 
-        fun packageInstallStep(context: Context, intent: Intent) {
+        fun packageInstallStep(
+            context: Context,
+            intent: Intent,
+        ) {
             val extras = intent.extras ?: return
             if (PACKAGE_INSTALLED_ACTION == intent.action) {
                 val downloadId = extras.getLong(ExtensionInstaller.EXTRA_DOWNLOAD_ID)
@@ -101,7 +117,9 @@ class ExtensionInstallBroadcast : BroadcastReceiver() {
                     PackageInstaller.STATUS_FAILURE, PackageInstaller.STATUS_FAILURE_ABORTED, PackageInstaller.STATUS_FAILURE_BLOCKED, PackageInstaller.STATUS_FAILURE_CONFLICT, PackageInstaller.STATUS_FAILURE_INCOMPATIBLE, PackageInstaller.STATUS_FAILURE_INVALID, PackageInstaller.STATUS_FAILURE_STORAGE -> {
                         extensionManager.setInstallationResult(downloadId, false)
                         if (status != PackageInstaller.STATUS_FAILURE_ABORTED) {
-                            if (DeviceUtil.isMiui) {
+                            if (status == PackageInstaller.STATUS_FAILURE_CONFLICT) {
+                                context.toast(R.string.extension_must_reinstall, Toast.LENGTH_LONG)
+                            } else if (DeviceUtil.isMiui) {
                                 context.toast(R.string.extensions_miui_warning, Toast.LENGTH_LONG)
                             } else {
                                 context.toast(R.string.could_not_install_extension)
@@ -122,7 +140,6 @@ class ExtensionInstallBroadcast : BroadcastReceiver() {
  * Used when we need to prompt the user to install multiple apps
  */
 class ExtensionInstallActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
@@ -136,9 +153,10 @@ class ExtensionInstallActivity : Activity() {
             val packageInstaller = packageManager.packageInstaller
             val data = UniFile.fromUri(this, intent.data).openInputStream()
 
-            val params = SessionParams(
-                SessionParams.MODE_FULL_INSTALL,
-            )
+            val params =
+                SessionParams(
+                    SessionParams.MODE_FULL_INSTALL,
+                )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 params.setRequireUserAction(USER_ACTION_NOT_REQUIRED)
             }
@@ -147,17 +165,25 @@ class ExtensionInstallActivity : Activity() {
             session.openWrite("package", 0, -1).use { packageInSession ->
                 data.copyTo(packageInSession)
             }
-
-            val newIntent = Intent(this, ExtensionInstallActivity::class.java)
-                .setAction(PACKAGE_INSTALLED_ACTION)
-                .putExtra(ExtensionInstaller.EXTRA_DOWNLOAD_ID, downloadId)
-                .putExtra(EXTRA_SESSION_ID, sessionId)
-            val mutableFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                PendingIntent.FLAG_MUTABLE
-            } else {
-                0
-            }
-            val pendingIntent = PendingIntent.getActivity(this, downloadId.hashCode(), newIntent, PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag)
+            val newIntent =
+                Intent(this, ExtensionInstallActivity::class.java)
+                    .setAction(PACKAGE_INSTALLED_ACTION)
+                    .putExtra(ExtensionInstaller.EXTRA_DOWNLOAD_ID, downloadId)
+                    .putExtra(EXTRA_SESSION_ID, sessionId)
+            val mutableFlag =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_MUTABLE
+                } else {
+                    0
+                }
+            val pendingIntent =
+                PendingIntent.getActivity(
+                    this,
+                    downloadId.hashCode(),
+                    newIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag,
+                    activityOptionsBackgroundOptions()?.toBundle(),
+                )
             val statusReceiver = pendingIntent.intentSender
             session.commit(statusReceiver)
             val extensionManager: ExtensionManager by injectLazy()

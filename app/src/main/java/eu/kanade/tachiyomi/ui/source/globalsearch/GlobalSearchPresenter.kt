@@ -45,7 +45,6 @@ open class GlobalSearchPresenter(
     private val preferences: PreferencesHelper = Injekt.get(),
     private val coverCache: CoverCache = Injekt.get(),
 ) : BaseCoroutinePresenter<GlobalSearchController>() {
-
     /**
      * Enabled sources.
      */
@@ -93,10 +92,12 @@ open class GlobalSearchPresenter(
         val hiddenCatalogues = preferences.hiddenSources().get()
         val pinnedCatalogues = preferences.pinnedCatalogues().get()
 
-        val list = sourceManager.getCatalogueSources()
-            .filter { it.lang in languages }
-            .filterNot { it.id.toString() in hiddenCatalogues }
-            .sortedBy { "(${it.lang}) ${it.name}" }
+        val list =
+            sourceManager
+                .getCatalogueSources()
+                .filter { it.lang in languages }
+                .filterNot { it.id.toString() in hiddenCatalogues }
+                .sortedBy { "(${it.lang}) ${it.name}" }
 
         return if (preferences.onlySearchPinned().get()) {
             list.filter { it.id.toString() in pinnedCatalogues }
@@ -114,11 +115,12 @@ open class GlobalSearchPresenter(
         }
 
         val languages = preferences.enabledLanguages().get()
-        val filterSources = extensionManager.installedExtensionsFlow.value
-            .filter { it.pkgName == filter }
-            .flatMap { it.sources }
-            .filter { it.lang in languages }
-            .filterIsInstance<CatalogueSource>()
+        val filterSources =
+            extensionManager.installedExtensionsFlow.value
+                .filter { it.pkgName == filter }
+                .flatMap { it.sources }
+                .filter { it.lang in languages }
+                .filterIsInstance<CatalogueSource>()
 
         if (filterSources.isEmpty()) {
             return enabledSources
@@ -133,9 +135,7 @@ open class GlobalSearchPresenter(
     protected open fun createCatalogueSearchItem(
         source: CatalogueSource,
         results: List<GlobalSearchMangaItem>?,
-    ): GlobalSearchItem {
-        return GlobalSearchItem(source, results)
-    }
+    ): GlobalSearchItem = GlobalSearchItem(source, results)
 
     fun confirmDeletion(manga: Manga) {
         coverCache.deleteFromCache(manga)
@@ -167,45 +167,49 @@ open class GlobalSearchPresenter(
         val pinnedSourceIds = preferences.pinnedCatalogues().get()
 
         fetchSourcesJob?.cancel()
-        fetchSourcesJob = presenterScope.launch {
-            sources.map { source ->
-                launch mainLaunch@{
-                    semaphore.withPermit {
-                        if (this@GlobalSearchPresenter.items.find { it.source == source }?.results != null) {
-                            return@mainLaunch
+        fetchSourcesJob =
+            presenterScope.launch {
+                sources.map { source ->
+                    launch mainLaunch@{
+                        semaphore.withPermit {
+                            if (this@GlobalSearchPresenter.items.find { it.source == source }?.results != null) {
+                                return@mainLaunch
+                            }
+                            val mangas =
+                                try {
+                                    source.getSearchManga(1, query, source.getFilterList())
+                                } catch (error: Exception) {
+                                    MangasPage(emptyList(), false)
+                                }.mangas
+                                    .take(10)
+                                    .map { networkToLocalManga(it, source.id) }
+                            fetchImage(mangas, source)
+                            if (mangas.isNotEmpty() && !loadTime.containsKey(source.id)) {
+                                loadTime[source.id] = Date().time
+                            }
+                            val result =
+                                createCatalogueSearchItem(
+                                    source,
+                                    mangas.map { GlobalSearchMangaItem(it) },
+                                )
+                            items =
+                                items
+                                    .map { item -> if (item.source == result.source) result else item }
+                                    .sortedWith(
+                                        compareBy(
+                                            // Bubble up sources that actually have results
+                                            { it.results.isNullOrEmpty() },
+                                            // Same as initial sort, i.e. pinned first then alphabetically
+                                            { it.source.id.toString() !in pinnedSourceIds },
+                                            { loadTime[it.source.id] ?: 0L },
+                                            { "${it.source.name.lowercase(Locale.getDefault())} (${it.source.lang})" },
+                                        ),
+                                    )
+                            withUIContext { view?.setItems(items) }
                         }
-                        val mangas = try {
-                            source.getSearchManga(1, query, source.getFilterList())
-                        } catch (error: Exception) {
-                            MangasPage(emptyList(), false)
-                        }
-                            .mangas.take(10)
-                            .map { networkToLocalManga(it, source.id) }
-                        fetchImage(mangas, source)
-                        if (mangas.isNotEmpty() && !loadTime.containsKey(source.id)) {
-                            loadTime[source.id] = Date().time
-                        }
-                        val result = createCatalogueSearchItem(
-                            source,
-                            mangas.map { GlobalSearchMangaItem(it) },
-                        )
-                        items = items
-                            .map { item -> if (item.source == result.source) result else item }
-                            .sortedWith(
-                                compareBy(
-                                    // Bubble up sources that actually have results
-                                    { it.results.isNullOrEmpty() },
-                                    // Same as initial sort, i.e. pinned first then alphabetically
-                                    { it.source.id.toString() !in pinnedSourceIds },
-                                    { loadTime[it.source.id] ?: 0L },
-                                    { "${it.source.name.lowercase(Locale.getDefault())} (${it.source.lang})" },
-                                ),
-                            )
-                        withUIContext { view?.setItems(items) }
                     }
                 }
             }
-        }
     }
 
     /**
@@ -213,7 +217,10 @@ open class GlobalSearchPresenter(
      *
      * @param manga the list of manga to initialize.
      */
-    private fun fetchImage(manga: List<Manga>, source: Source) {
+    private fun fetchImage(
+        manga: List<Manga>,
+        source: Source,
+    ) {
         presenterScope.launch {
             fetchImageFlow.emit(Pair(manga, source))
         }
@@ -224,24 +231,26 @@ open class GlobalSearchPresenter(
      */
     private fun initializeFetchImageSubscription() {
         fetchImageJob?.cancel()
-        fetchImageJob = fetchImageFlow.onEach { (mangaList, source) ->
-            mangaList
-                .filter { it.thumbnail_url == null && !it.initialized }
-                .forEach {
-                    presenterScope.launchIO {
-                        try {
-                            val manga = getMangaDetails(it, source)
-                            withUIContext {
-                                view?.onMangaInitialized(source as CatalogueSource, manga)
-                            }
-                        } catch (_: Exception) {
-                            withUIContext {
-                                view?.onMangaInitialized(source as CatalogueSource, it)
+        fetchImageJob =
+            fetchImageFlow
+                .onEach { (mangaList, source) ->
+                    mangaList
+                        .filter { it.thumbnail_url == null && !it.initialized }
+                        .forEach {
+                            presenterScope.launchIO {
+                                try {
+                                    val manga = getMangaDetails(it, source)
+                                    withUIContext {
+                                        view?.onMangaInitialized(source as CatalogueSource, manga)
+                                    }
+                                } catch (_: Exception) {
+                                    withUIContext {
+                                        view?.onMangaInitialized(source as CatalogueSource, it)
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-        }.launchIn(presenterScope)
+                }.launchIn(presenterScope)
     }
 
     /**
@@ -250,7 +259,10 @@ open class GlobalSearchPresenter(
      * @param manga the manga to initialize.
      * @return The initialized manga.
      */
-    private suspend fun getMangaDetails(manga: Manga, source: Source): Manga {
+    private suspend fun getMangaDetails(
+        manga: Manga,
+        source: Source,
+    ): Manga {
         val networkManga = source.getMangaDetails(manga.copy())
         manga.copyFrom(networkManga)
         manga.initialized = true
@@ -265,7 +277,10 @@ open class GlobalSearchPresenter(
      * @param sManga the manga from the source.
      * @return a manga from the database.
      */
-    protected open fun networkToLocalManga(sManga: SManga, sourceId: Long): Manga {
+    protected open fun networkToLocalManga(
+        sManga: SManga,
+        sourceId: Long,
+    ): Manga {
         var localManga = db.getManga(sManga.url, sourceId).executeAsBlocking()
         if (localManga == null) {
             val newManga = Manga.create(sManga.url, sManga.title, sourceId)
